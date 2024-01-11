@@ -48,6 +48,10 @@ static char __in_flash() *vips[] = {
         "Volodymyr Vialyi",
         "markbo",
         "James Will",
+        "David Raulo",
+        "Sodiumlightbaby",
+        "Paul S. Jenkins",
+        "Muhammad A",
         // YouTube
         "AJ_Whitney",
         // Other
