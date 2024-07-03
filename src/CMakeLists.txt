@@ -2,54 +2,49 @@
 
 file(GLOB_RECURSE TINY_USB_SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src/*.c)
 
-add_library(tinyusb_ria STATIC EXCLUDE_FROM_ALL)
-target_include_directories(tinyusb_ria PRIVATE
+add_library(tinyusb_mia STATIC EXCLUDE_FROM_ALL)
+target_include_directories(tinyusb_mia PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src
-    ria
+    mia
 )
-target_link_libraries(tinyusb_ria PUBLIC
+target_link_libraries(tinyusb_mia PUBLIC
     pico_stdlib
 )
-target_sources(tinyusb_ria PRIVATE
+target_sources(tinyusb_mia PRIVATE
     ${TINY_USB_SRC_FILES}
 )
 
-add_library(tinyusb_vga STATIC EXCLUDE_FROM_ALL)
-target_include_directories(tinyusb_vga PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src
-    vga
-)
-target_link_libraries(tinyusb_vga PUBLIC
-    pico_stdlib
-)
-target_sources(tinyusb_vga PRIVATE
-    ${TINY_USB_SRC_FILES}
-)
+string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
+# The Oric LOCI MIA (media interface adapter)
 
-# The Pi Pico RIA
+add_executable(rp6502_mia)
+pico_add_extra_outputs(rp6502_mia)
+pico_set_program_name(rp6502_mia "LOCI MIA")
+pico_set_binary_type(rp6502_mia copy_to_ram)
+pico_set_linker_script(rp6502_mia ${CMAKE_CURRENT_LIST_DIR}/memmap_xram_mia.ld)
 
-add_executable(rp6502_ria)
-pico_add_extra_outputs(rp6502_ria)
-pico_set_program_name(rp6502_ria "RP6502 RIA")
-pico_set_binary_type(rp6502_ria copy_to_ram)
-
-target_include_directories(rp6502_ria PRIVATE
+target_include_directories(rp6502_mia PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src
-    ria
+    mia
 )
 
-target_compile_definitions(rp6502_ria PRIVATE
+target_compile_definitions(rp6502_mia PRIVATE
     LFS_NO_MALLOC=1
-    LFS_NAME_MAX=16
+    LFS_NAME_MAX=64
+    #LFS_YES_TRACE=1
+    PICO_FLASH_SIZE_BYTES=16777216
+    PICO_USE_STACK_GUARDS=1
+    PICO_DEBUG_MALLOC=1
+    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=32
 )
 
-target_compile_options(rp6502_ria PRIVATE
-  -Wall -Wextra
+target_compile_options(rp6502_mia PRIVATE
+  -Wall -Wextra -Os
 )
 
-target_link_libraries(rp6502_ria PRIVATE
+target_link_libraries(rp6502_mia PRIVATE
     pico_stdlib
     pico_multicore
     pico_rand
@@ -58,126 +53,69 @@ target_link_libraries(rp6502_ria PRIVATE
     hardware_pwm
     hardware_flash
     hardware_rtc
-    tinyusb_ria
+    hardware_i2c
+    tinyusb_mia
+
 )
 
-pico_generate_pio_header(rp6502_ria
-    ${CMAKE_CURRENT_LIST_DIR}/ria/sys/sys.pio
+pico_generate_pio_header(rp6502_mia
+    ${CMAKE_CURRENT_LIST_DIR}/mia/sys/mia.pio
 )
 
-pico_generate_pio_header(rp6502_ria
-    ${CMAKE_CURRENT_LIST_DIR}/ria/sys/vga.pio
-)
-
-target_sources(rp6502_ria PRIVATE
-    ria/main.c
-    ria/str.c
-    ria/api/api.c
-    ria/api/clk.c
-    ria/api/oem.c
-    ria/api/rng.c
-    ria/api/std.c
-    ria/aud/aud.c
-    ria/aud/psg.c
-    ria/mon/fil.c
-    ria/mon/hlp.c
-    ria/mon/mon.c
-    ria/mon/ram.c
-    ria/mon/rom.c
-    ria/mon/set.c
-    ria/mon/vip.c
-    ria/sys/cfg.c
-    ria/sys/com.c
-    ria/sys/cpu.c
-    ria/sys/led.c
-    ria/sys/lfs.c
-    ria/sys/mem.c
-    ria/sys/pix.c
-    ria/sys/ria.c
-    ria/sys/sys.c
-    ria/sys/vga.c
-    ria/usb/hid.c
-    ria/usb/kbd.c
-    ria/usb/mou.c
-    ria/usb/msc.c
-    ria/usb/pad.c
-    ria/usb/usb.c
+target_sources(rp6502_mia PRIVATE
+    mia/main.c
+    mia/str.c
+    mia/api/api.c
+    mia/api/clk.c
+    mia/api/dir.c
+    mia/api/mnt.c
+    mia/api/oem.c
+    mia/api/rng.c
+    mia/api/std.c
+ #   mia/aud/aud.c
+    mia/mon/fil.c
+    mia/mon/hlp.c
+    mia/mon/mon.c
+    mia/mon/ram.c
+    mia/mon/rom.c
+    mia/mon/set.c
+    mia/mon/vip.c
+    mia/sys/cfg.c
+    mia/sys/com.c
+    mia/sys/cpu.c
+    mia/sys/ext.c
+    mia/sys/led.c
+    mia/sys/lfs.c
+    mia/sys/mem.c
+    mia/sys/mia.c
+#    mia/sys/pix.c
+    mia/sys/pwr.c
+    mia/sys/sys.c
+    mia/sys/ssd.c
+#    mia/sys/vga.c
+    mia/usb/cdc.c
+    mia/usb/hid_ps4.c
+    mia/usb/hid.c
+    mia/usb/kbd.c
+    mia/usb/mou.c
+    mia/usb/msc.c
+    mia/usb/usb.c
+    mia/oric/map.c
+    mia/oric/dsk.c
+    mia/oric/tap.c
     fatfs/ff.c
     fatfs/ffunicode.c
     littlefs/lfs.c
     littlefs/lfs_util.c
 )
 
-
-# The Pi Pico VGA
-
-add_executable(rp6502_vga)
-pico_add_extra_outputs(rp6502_vga)
-pico_set_program_name(rp6502_vga "RP6502 VGA")
-pico_set_binary_type(rp6502_vga copy_to_ram)
-pico_set_linker_script(rp6502_vga ${CMAKE_CURRENT_LIST_DIR}/memmap_xram.ld)
-
-target_include_directories(rp6502_vga PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src
-    vga
-)
-
-target_sources(rp6502_vga PRIVATE
-    vga/main.c
-    vga/modes/mode1.c
-    vga/modes/mode2.c
-    vga/modes/mode3.c
-    vga/modes/mode4.c
-    vga/modes/mode4.S
-    vga/sys/led.c
-    vga/sys/pix.c
-    vga/sys/ria.c
-    vga/sys/std.c
-    vga/sys/vga.c
-    vga/term/color.c
-    vga/term/font.c
-    vga/term/term.c
-    vga/usb/cdc.c
-    vga/usb/descriptors.c
-    vga/usb/serno.c
-)
-
-target_link_libraries(rp6502_vga PRIVATE
-    pico_stdlib
-    pico_multicore
-    pico_unique_id
-    pico_scanvideo_dpi
-    hardware_interp
-    tinyusb_vga
-)
-
-pico_generate_pio_header(rp6502_vga
-    ${CMAKE_CURRENT_LIST_DIR}/vga/sys/pix.pio
-)
-
-pico_generate_pio_header(rp6502_vga
-    ${CMAKE_CURRENT_LIST_DIR}/vga/sys/ria.pio
-)
-
-target_compile_definitions(rp6502_vga PRIVATE
-    PICO_SCANVIDEO_PLANE_COUNT=3
-    PICO_SCANVIDEO_MAX_SCANLINE_BUFFER_WORDS=323
-    PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=10
-    PICO_SCANVIDEO_COLOR_PIN_BASE=6
-    PICO_SCANVIDEO_SYNC_PIN_BASE=26
-    PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
-    PICO_RP2040_USB_DEVICE_UFRAME_FIX=1
-)
-
-
 # Project defines available to both Pi Picos.
 # Please change name for hardware forks.
 # For release, set version string and set code page to 0.
 
-set_property(TARGET rp6502_ria rp6502_vga
+set_property(TARGET rp6502_mia
     APPEND PROPERTY COMPILE_DEFINITIONS
-    RP6502_NAME="Picocomputer 6502"
+    RP6502_NAME="Oric LOCI"
     RP6502_VERSION=""
     RP6502_CODE_PAGE=850
     RP6502_KEYBOARD=EN_US
@@ -186,19 +124,9 @@ set_property(TARGET rp6502_ria rp6502_vga
     RP6502_EXFAT=0
 )
 
-
-# If no version set, touch the file that provides a dev timestamp for the version.
-
-get_target_property(RP6502_RIA_COMPILE_DEFINITIONS rp6502_ria COMPILE_DEFINITIONS)
-if(RP6502_RIA_COMPILE_DEFINITIONS MATCHES "RP6502_VERSION=\"\"")
-    add_custom_command(TARGET rp6502_ria
-        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_LIST_DIR}/ria/sys/sys.c
-    )
-endif()
-
-get_target_property(RP6502_VGA_COMPILE_DEFINITIONS rp6502_vga COMPILE_DEFINITIONS)
-if(RP6502_VGA_COMPILE_DEFINITIONS MATCHES "RP6502_VERSION=\"\"")
-    add_custom_command(TARGET rp6502_vga
-        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_LIST_DIR}/vga/sys/ria.c
+get_target_property(RP6502_MIA_COMPILE_DEFINITIONS rp6502_mia COMPILE_DEFINITIONS)
+if(RP6502_MIA_COMPILE_DEFINITIONS MATCHES "RP6502_VERSION=\"\"")
+    add_custom_command(TARGET rp6502_mia
+        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_LIST_DIR}/mia/sys/sys.c
     )
 endif()
