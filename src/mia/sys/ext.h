@@ -41,5 +41,6 @@ void ext_put(uint8_t pin, bool value);
 bool ext_get(uint8_t pin);
 bool ext_get_cached(uint8_t pin);
 void ext_set_dir(uint8_t pin, bool output);
+void ext_pulse(uint8_t pin);
 
 #endif /* _EXT_H_ */

@@ -265,6 +265,12 @@ void ext_put(uint8_t pin, bool value)
     }
 }
 
+void ext_pulse(uint8_t pin)
+{
+    uint8_t txdata[] = {I2C_IOEXP_REG_OUT, ext_port_odata ^ pin, ext_port_odata};
+    i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
+}
+
 void ext_set_dir(uint8_t pin, bool output)
 {
 #ifdef I2C_IOEXP_OUTPUT_IS_ONE

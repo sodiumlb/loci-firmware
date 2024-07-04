@@ -393,8 +393,7 @@ void dsk_task(void){
     static uint32_t dsk_rw_countdown;
 
     if(dsk_irq_enable && dsk_reg_irq == 0x00){     //Slow IO signal, just toggle it - fingers crossed
-        ext_put(EXT_IRQ,1);
-        ext_put(EXT_IRQ,0);
+        ext_pulse(EXT_IRQ);
         //printf("[irq %d]",dsk_state);
     }
 
