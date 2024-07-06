@@ -16,7 +16,6 @@
 #include "sys/com.h"
 #include "sys/mem.h"
 #include "sys/sys.h"
-#include "sys/vga.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
 

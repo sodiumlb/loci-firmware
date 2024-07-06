@@ -6,7 +6,6 @@
 
 #include "main.h"
 #include "sys/sys.h"
-#include "sys/vga.h"
 #include "usb/usb.h"
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
