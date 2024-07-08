@@ -103,6 +103,7 @@ void dir_api_opendir(void){
 
 void dir_api_closedir(void){
     int fd = API_A;
+    api_zxstack();
     if (fd < 0)
         return api_return_errno(API_EINVAL);
     if(fd >= FD_OFFS_FAT){
