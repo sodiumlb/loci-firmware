@@ -38,10 +38,10 @@ asm(".equ oric_bank3, 0x2000C000");     //basic rom
 #define IOREGSW(addr) ((uint16_t *)&IOREGS(addr))[0]
 
 // The xstack is:
-// 256 bytes, enough to hold a CC65 stack frame.
+// 512 bytes, enough to hold two CC65 stack frames.
 // 1 byte at end+1 always zero for cstring and safety.
-// Using xstack fort cstrings doesn't require sending the zero termination.
-#define XSTACK_SIZE 0x100
+// Using xstack for cstrings doesn't require sending the zero termination.
+#define XSTACK_SIZE 0x200
 extern uint8_t xstack[];
 extern volatile size_t xstack_ptr;
 
