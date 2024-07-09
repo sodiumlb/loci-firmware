@@ -1090,7 +1090,7 @@ void mia_init(void)
         IOREGS(i) = 0x00;
     }
     //Register space clears
-    for(int i=0x03A0; i<=0x03BA; i++){
+    for(int i=0x03A0; i<=0x03BF; i++){
         IOREGS(i) = 0x00;
     }
 
@@ -1108,8 +1108,8 @@ void mia_init(void)
     for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
         mia_iopage_enable_map |= (0x1ULL << i);
     }
-    //Enable response on IO registers 0x3A0-0x3B9
-    for(int i=(0xA0 >> 2); i<=(0xBA >> 2); i++){
+    //Enable response on IO registers 0x3A0-0x3BF
+    for(int i=(0xA0 >> 2); i<=(0xBF >> 2); i++){
         mia_iopage_enable_map |= (0x1ULL << i);
     }
    
