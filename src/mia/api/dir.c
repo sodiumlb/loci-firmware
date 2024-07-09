@@ -156,14 +156,14 @@ void dir_api_readdir(void){
         dirent.d_attrib = AM_SYS;   //Using system file attribute for devices
         char* dev_message;
         if(dir_dev == 0){
-            strcpy((char*)dirent.d_name, "0:] Internal storage [15MB]");
+            strcpy((char*)dirent.d_name, "0: Internal storage [15MB]");
         }else{
             while(!tuh_mounted(dir_dev))
                 dir_dev++;
             if(dir_dev > CFG_TUH_DEVICE_MAX)
                 return api_return_errno(API_ENODEV);
             dev_message = usb_get_status(dir_dev);
-            snprintf((char*)dirent.d_name,64,"%d:] %s", dir_dev, dev_message);
+            strncpy((char*)dirent.d_name, 64, dev_message);
         }
         dir_dev++;
     }
