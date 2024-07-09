@@ -14,15 +14,15 @@ void api_task(void)
 {
     static uint8_t active_op = 0;
     // Latch called op in case 6502 app misbehaves
-    if (cpu_active() && !mia_active() &&
+    if (cpu_active() && !mia_active() && !mia_boot_active() &&
         !active_op && API_BUSY &&
         API_OP != 0x00 && API_OP != 0xFF)
         active_op = API_OP;
-    if (active_op && !mia_boot_active())     //Boot op ROM loading exception
+    if (active_op)     //Boot op ROM loading exception
     {
         if (!main_api(active_op))
             api_return_errno(API_ENOSYS);
-        if (!API_BUSY)
+        if (!API_BUSY || mia_boot_active())
             active_op = 0;
     }
 }
