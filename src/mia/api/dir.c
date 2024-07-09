@@ -163,7 +163,7 @@ void dir_api_readdir(void){
             if(dir_dev > CFG_TUH_DEVICE_MAX)
                 return api_return_errno(API_ENODEV);
             dev_message = usb_get_status(dir_dev);
-            strncpy((char*)dirent.d_name, 64, dev_message);
+            strncpy((char*)dirent.d_name, dev_message, 64);
         }
         dir_dev++;
     }
