@@ -48,7 +48,11 @@
 #endif
 static uint8_t ext_port_odata = I2C_INIT_ODATA;
 static uint8_t ext_port_idata = 0;
+static uint8_t ext_port_idata_prev = 0;
 static uint8_t ext_port_dir = I2C_IOEXP_DIR;
+
+#define EXT_BTN_LONGPRESS 2000
+static absolute_time_t ext_btn_holdtimer; 
 
 
 static enum {
@@ -60,6 +64,8 @@ static enum {
 
 void ext_update(void);
 bool ext_get_cached(uint8_t pin);
+bool ext_btn_pressed(uint8_t pin);
+bool ext_btn_released(uint8_t pin);
 
 void ext_init(void)
 {
@@ -92,6 +98,8 @@ void ext_init(void)
         i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
     }
 #endif
+    ext_update();
+    ext_port_idata_prev = ext_port_idata;
     ext_state = EXT_IDLE;
 }
 
@@ -115,7 +123,7 @@ const uint8_t __in_flash() cload_patch_11[] = {
     0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x60
 };
 
-#define EXT_I2C_SAMPLE_DELAY 0x4000;
+#define EXT_I2C_SAMPLE_DELAY 0x1000;
 uint16_t ext_refresh_cnt = EXT_I2C_SAMPLE_DELAY;
 
 void ext_task(void)
@@ -170,44 +178,54 @@ void ext_task(void)
     */
 
     ext_update();
+
+    if(ext_btn_pressed(EXT_BTN_A)){
+        ext_btn_holdtimer = delayed_by_ms(get_absolute_time(), EXT_BTN_LONGPRESS);
+    }
+
     if(!main_active()){
-        if(ext_get_cached(EXT_BTN_A)){
-            rom_mon_load("loci_rom.rp6502", 15);    //First ROM priority: USB storage
-            if(!rom_active()){
-                rom_load("LOCI_ROM",8);             //Second ROM priority: new name in flash
-            }
-            if(!rom_active()){
-                rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash
-            }
-            ext_state = EXT_LOADING_BIOS;
+        if(ext_btn_released(EXT_BTN_A)){
+            if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
+                rom_mon_load("loci_rom.rp6502", 15);    //First ROM priority: USB storage
+                if(!rom_active()){
+                    rom_load("LOCI_ROM",8);             //Second ROM priority: new name in flash
+                }
+                if(!rom_active()){
+                    rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash
+                }
+                ext_state = EXT_LOADING_BIOS;
 
-            /**
-            //mia_set_rom_read_enable(true);
-            //ext_put(EXT_nROMDIS,false);
-            //ext_set_dir(EXT_nROMDIS,true);
-            if(!rom_load("MICRODISC",9)){
-                ssd_write_text(0,2,true,"!rom_load failed");
-            }else{
-                ssd_write_text(0,2,false,"DEV ROM loaded ok");
-            }
-            ext_state = EXT_LOADING_DEVROM;
+                /**
+                //mia_set_rom_read_enable(true);
+                //ext_put(EXT_nROMDIS,false);
+                //ext_set_dir(EXT_nROMDIS,true);
+                if(!rom_load("MICRODISC",9)){
+                    ssd_write_text(0,2,true,"!rom_load failed");
+                }else{
+                    ssd_write_text(0,2,false,"DEV ROM loaded ok");
+                }
+                ext_state = EXT_LOADING_DEVROM;
 
-            f_open(&tap_file,"im10.tap",FA_READ);
-            tap_mount_fat(&tap_file);
-            //f_open(&dsk_file,"sedoric3.dsk",FA_READ);
-            //f_open(&dsk_file,"B7en-1_3.dsk",FA_READ | FA_WRITE);
-            f_open(&dsk_file,"PushingTheEnvelope.dsk",FA_READ);
-            if(dsk_mount_fat(0,&dsk_file)){
-                ssd_write_text(0,0,false,"dsk loaded ok");
+                f_open(&tap_file,"im10.tap",FA_READ);
+                tap_mount_fat(&tap_file);
+                //f_open(&dsk_file,"sedoric3.dsk",FA_READ);
+                //f_open(&dsk_file,"B7en-1_3.dsk",FA_READ | FA_WRITE);
+                f_open(&dsk_file,"PushingTheEnvelope.dsk",FA_READ);
+                if(dsk_mount_fat(0,&dsk_file)){
+                    ssd_write_text(0,0,false,"dsk loaded ok");
+                }
+                mou_xreg(0x4000);
+                main_run();
+                */
             }
-            mou_xreg(0x4000);
-            main_run();
-            */
         }
     }else{
-        if(ext_get_cached(EXT_BTN_A)){
+        if(ext_btn_released(EXT_BTN_A)){
             main_break();
         }
+    }
+    if(ext_get_cached(EXT_BTN_A) && (absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) > 0)){
+        //Longpress function here
     }
     /*
     //char status[32];
@@ -299,17 +317,17 @@ void ext_set_dir(uint8_t pin, bool output)
 }
 
 void ext_update(void){
+        ext_port_idata_prev = ext_port_idata;
         uint8_t txdata[] = { I2C_IOEXP_REG_IN };
         i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
-        i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &ext_port_idata, 1, false);    
+        i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &ext_port_idata, 1, false);
+#ifndef I2C_IOEXP_REG_INV
+        ext_port_idata ^= I2C_IOEXP_INV;    
+#endif
 }
 
 bool ext_get_cached(uint8_t pin){
-#ifdef I2C_IOEXP_REG_INV
         return((ext_port_idata & pin) != 0x00);
-#else
-        return(((ext_port_idata ^ I2C_IOEXP_INV) & pin) != 0x00);
-#endif
 }
  
 bool ext_get(uint8_t pin)
@@ -323,13 +341,19 @@ bool ext_get(uint8_t pin)
         uint8_t txdata[] = { I2C_IOEXP_REG_IN };
         i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
         i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &ext_port_idata, 1, false);
-#ifdef I2C_IOEXP_REG_INV
-        return((ext_port_idata & pin) != 0x00);
-#else
-        return(((ext_port_idata ^ I2C_IOEXP_INV) & pin) != 0x00);
+#ifndef I2C_IOEXP_REG_INV
+        ext_port_idata ^= I2C_IOEXP_INV;
 #endif
+        return((ext_port_idata & pin) != 0x00);
     //Read outputs from local copy
     }else{
         return((ext_port_odata & pin) != 0x00);
     }
+}
+
+bool ext_btn_pressed(uint8_t pin){
+    return !!((ext_port_idata & ~ext_port_idata_prev) & pin);
+}
+bool ext_btn_released(uint8_t pin){
+    return !!((~ext_port_idata & ext_port_idata_prev) & pin);
 }
