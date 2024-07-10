@@ -449,7 +449,7 @@ void dsk_task(void){
                 //TODO Verify only checking first IDAM, not all. Problem?
                 uint32_t pos = dsk_seek_next_idam(0);
                 dsk_set_status(DSK_STAT_HLOADED,true);
-                dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
+                    dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
                 dsk_active.pos = pos;
             }
             dsk_state = DSK_TOGGLE_IRQ;
@@ -692,12 +692,16 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         switch(cmd){
             case SEEK: //and RESTORE
                 if(cmd_flags && DSK_FLAG_IS_SEEK){
-                    dsk_next_track = dsk_reg_data;
-                    dsk_reg_track = dsk_next_track;
+                    //Don't seek beyond max tracks
+                    if(dsk_reg_data >= dsk_active.drive->tracks){
+                        dsk_next_track = dsk_active.drive->tracks - 1;
+                    }else{
+                        dsk_next_track = dsk_reg_data;
+                    }
                 }else{ //Restore cmd
                     dsk_next_track = 0;
-                    dsk_reg_track = dsk_next_track;
                 }
+                dsk_reg_track = dsk_next_track;
                 break;
             case STEP:
                 if(dsk_active.step_dir_out){
