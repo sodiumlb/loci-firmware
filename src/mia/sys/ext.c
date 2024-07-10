@@ -70,14 +70,12 @@ bool ext_btn_released(uint8_t pin);
 void ext_init(void)
 {
 
-    //i2c_init(EXT_I2C, 400*1000);
-    //i2c_init(EXT_I2C, 1200*1000);
     i2c_init(EXT_I2C, 1200*1000);
     gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
-//    bi_dec(bi_2pins_with_func(SDA_PIN,SCL_PIN,GPIO_FUNC_I2C));
+
     {
         uint8_t txdata[] = { I2C_IOEXP_REG_DIR, ext_port_dir };
         i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
@@ -132,7 +130,6 @@ void ext_task(void)
         case EXT_LOADING_DEVROM:
             if(!rom_active()){
                 if(!rom_load("BASIC11",7)){
-                //if(!rom_load("test108k",8)){
                     ssd_write_text(0,2,true,"!rom_load failed");
                 }else{
                     ssd_write_text(0,1,false,"BIOS loaded ok");
@@ -144,13 +141,6 @@ void ext_task(void)
             if(!rom_active()){
                 ext_state = EXT_IDLE;
                 main_run();
-                //Patch for TAP loading CLOAD
-                //xram[0xE4AC+0] = 0xEA;  //NOP
-                //xram[0xE4AC+1] = 0xEA;  //NOP
-                //xram[0xE4AC+2] = 0xEA;  //NOP
-                //for(uint16_t i=0; i<sizeof(cload_patch_11); i++){
-                //    xram[CLOAD_PATCH_11_ADDR+i] = cload_patch_11[i];
-                //}    
               }
             break;
     }
@@ -158,24 +148,6 @@ void ext_task(void)
     if(ext_refresh_cnt--)
         return;
     ext_refresh_cnt = EXT_I2C_SAMPLE_DELAY;
-
-    /*
-    static uint8_t scan_addr = 1;
-    {
-        uint8_t idata;
-        uint8_t txdata[] = { scan_addr };
-
-        i2c_write_blocking(EXT_I2C, I2C_IOEXP_ADDR, txdata, 1, true);
-        if(i2c_read_blocking(EXT_I2C, I2C_IOEXP_ADDR, &idata, 1, false) < 0){
-            printf(".");
-        }else{
-            printf("%02x%02x|",scan_addr,idata);
-        }
-    }
-    if(scan_addr++ > 0x13)
-        scan_addr = 1;
-    return;
-    */
 
     ext_update();
 
@@ -194,29 +166,6 @@ void ext_task(void)
                     rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash
                 }
                 ext_state = EXT_LOADING_BIOS;
-
-                /**
-                //mia_set_rom_read_enable(true);
-                //ext_put(EXT_nROMDIS,false);
-                //ext_set_dir(EXT_nROMDIS,true);
-                if(!rom_load("MICRODISC",9)){
-                    ssd_write_text(0,2,true,"!rom_load failed");
-                }else{
-                    ssd_write_text(0,2,false,"DEV ROM loaded ok");
-                }
-                ext_state = EXT_LOADING_DEVROM;
-
-                f_open(&tap_file,"im10.tap",FA_READ);
-                tap_mount_fat(&tap_file);
-                //f_open(&dsk_file,"sedoric3.dsk",FA_READ);
-                //f_open(&dsk_file,"B7en-1_3.dsk",FA_READ | FA_WRITE);
-                f_open(&dsk_file,"PushingTheEnvelope.dsk",FA_READ);
-                if(dsk_mount_fat(0,&dsk_file)){
-                    ssd_write_text(0,0,false,"dsk loaded ok");
-                }
-                mou_xreg(0x4000);
-                main_run();
-                */
             }
         }
     }else{
@@ -227,50 +176,6 @@ void ext_task(void)
     if(ext_get_cached(EXT_BTN_A) && (absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) > 0)){
         //Longpress function here
     }
-    /*
-    //char status[32];
-    if(ext_get_cached(EXT_BTN_D)){
-        //sprintf((char *)mbuf,"E6C9: 0x%02x%02x%02x%02x%02x%02x",
-        //    xram[0xE6C9],xram[0xE6CA],xram[0xE6CB],xram[0xE6CC],xram[0xE6CD],xram[0xE6CE]);
-        //sprintf((char *)mbuf,"FFFA: 0x%02x%02x%02x%02x%02x%02x",
-        //    xram[0xFFFA],xram[0xFFFB],xram[0xFFFC],xram[0xFFFD],xram[0xFFFE],xram[0xFFFF]);
-        sprintf((char *)mbuf,"E4A8: 0x%02x%02x%02x%02x%02x%02x%02x%02x ",
-            xram[0xE4A8],xram[0xE4A9],xram[0xE4AA],xram[0xE4AB],xram[0xE4AC],xram[0xE4AD],xram[0xE4AE],xram[0xE4AF]);
-        ssd_write_text(0,4,false,(char *)mbuf);
-        //sprintf((char *)mbuf,"AR: 0x%08x", ssd_action_rword);
-        //ssd_write_text(0,1,!ssd_action_is_wr,(char *)mbuf);
-        //sprintf((char *)mbuf,"AW: 0x%08x", ssd_action_word);
-        //            xram[0x04FA],xram[0x04FB],xram[0x04FC],xram[0x04FD],xram[0x04FE],xram[0x04FF]);
-        //ssd_write_text(0,2,ssd_action_is_wr,(char *)mbuf);
-        //sprintf((char *)mbuf,"DSK %02x %02x %02x %02x %02x %02x",
-        //    dsk_reg_cmd, dsk_reg_status, dsk_reg_irq, dsk_state, IOREGS(DSK_IO_DRQ), IOREGS(DSK_IO_CMD));
-        //ssd_write_text(0,3,false,(char *)mbuf);
-    }
-    */
-/*
-    uint8_t rxdata;
-    
-    int bytes_written;
-    int bytes_read;
-    {
-        uint8_t txdata[] = { I2C_IOEXP_REG_IN };
-        bytes_written = i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
-    }
-    bytes_read = i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &rxdata, 1, false);
-    printf("%d %d %02x\n",bytes_written, bytes_read, rxdata);
-    
-
-   printf(".\n");
-    for(uint8_t i=0x08; i < 0x80; i++){
-        int ret = -1;
-        ret = i2c_read_blocking(EXT_I2C, i, &rxdata, 1, false);
-        if(ret>=0)
-        { 
-            printf("%02x found\n",i);
-        }
-    }
-*/
-
 }
 
 void ext_put(uint8_t pin, bool value)
