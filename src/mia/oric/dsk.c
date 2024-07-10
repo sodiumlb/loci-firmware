@@ -691,17 +691,12 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         dsk_set_status(DSK_STAT_BUSY,true);
         switch(cmd){
             case SEEK: //and RESTORE
-                if(cmd_flags && DSK_FLAG_IS_SEEK){
-                    //Don't seek beyond max tracks
-                    if(dsk_reg_data >= dsk_active.drive->tracks){
-                        dsk_next_track = dsk_active.drive->tracks - 1;
-                    }else{
-                        dsk_next_track = dsk_reg_data;
-                    }
+                if(cmd_flags & DSK_FLAG_IS_SEEK){
+                    dsk_next_track = dsk_reg_data;
                 }else{ //Restore cmd
                     dsk_next_track = 0;
+                    dsk_reg_track = dsk_next_track;
                 }
-                dsk_reg_track = dsk_next_track;
                 break;
             case STEP:
                 if(dsk_active.step_dir_out){
@@ -730,6 +725,11 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         //TODO wp
         //TODO error check
 
+        //Don't seek beyond max tracks
+        if(dsk_next_track >= dsk_active.drive->tracks){
+            dsk_next_track = dsk_active.drive->tracks - 1;
+        }
+        //Also triggers for SEEK 
         if(cmd_flags && DSK_FLAG_UPD_TRACK){
             dsk_reg_track = dsk_next_track;
         }
