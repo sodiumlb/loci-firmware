@@ -179,6 +179,7 @@ void mia_stop(void)
     //ext_put(EXT_OE,false);
     mia_set_rom_ram_enable(false,false);
     //mia_set_rom_read_enable(false);
+    mia_boot_settings = 0x00;
     
     if ((action_state == action_state_read || action_state == action_state_write) &&
         action_result == -2 && action_retries > 0)
