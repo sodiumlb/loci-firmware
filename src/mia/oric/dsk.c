@@ -419,14 +419,14 @@ void dsk_task(void){
                 //TODO: Read CLK, DDEN
                 uint8_t side = (ctrl_from_act >> 4) & 0x01;
                 uint8_t drive = (ctrl_from_act >> 5) & 0x03;
-                if(dsk_active.track_writeback && (  drive != dsk_active.drive_num 
+                if(is_cmd && dsk_active.track_writeback && (  drive != dsk_active.drive_num 
                                                     || side != dsk_active.side 
                                                     || dsk_next_track != dsk_active.track)){  
                     dsk_flush_track();
                 }
                 dsk_set_active_drive(drive);
                 dsk_set_active_side(side);
-                if(dsk_active.buf_update_needed){
+                if(is_cmd && dsk_active.buf_update_needed){     //Only trigger track update when BUSY
                     dsk_set_active_track(dsk_active.track);
                     dsk_active.buf_update_needed = false;
                 }
@@ -677,6 +677,9 @@ void dsk_act(uint8_t raw_cmd){
 }
 */
 
+//char dsk_state_id[][5] = { 
+//    {"idle"}, {"seek"}, { "reap"}, { "read"}, { "wrip"}, { "writ"}, { "reaa"}, { "tirq"}, { "clean"}
+//};
 uint8_t dsk_cmd(uint8_t raw_cmd){
     DSK_CMD cmd;
     dsk_reg_status = 0x00;
@@ -791,6 +794,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
 
     }
     IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
+    //printf("%s %02x %02x\n", dsk_state_id[dsk_state], raw_cmd, dsk_next_track);
     return dsk_next_track;
 }
 
@@ -817,8 +821,9 @@ void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work her
 //Microdisc control register
 //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
 void dsk_set_ctrl(uint8_t raw_reg){
-    dsk_reg_ctrl = raw_reg;             //Transfer with CMD in dsk_act
-    sio_hw->fifo_wr = 0x00000000 | (dsk_reg_ctrl << 8);
+    if((dsk_reg_ctrl ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
+        sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
+    dsk_reg_ctrl = raw_reg;             
 /*
     //TODO: Read CLK, DDEN
     uint8_t side = (raw_reg >> 4) & 0x01;
