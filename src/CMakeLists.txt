@@ -18,19 +18,19 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
 # The Oric LOCI MIA (media interface adapter)
 
-add_executable(rp6502_mia)
-pico_add_extra_outputs(rp6502_mia)
-pico_set_program_name(rp6502_mia "LOCI MIA")
-pico_set_binary_type(rp6502_mia copy_to_ram)
-pico_set_linker_script(rp6502_mia ${CMAKE_CURRENT_LIST_DIR}/memmap_xram_mia.ld)
+add_executable(loci_mia)
+pico_add_extra_outputs(loci_mia)
+pico_set_program_name(loci_mia "LOCI MIA")
+pico_set_binary_type(loci_mia copy_to_ram)
+pico_set_linker_script(loci_mia ${CMAKE_CURRENT_LIST_DIR}/memmap_xram_mia.ld)
 
-target_include_directories(rp6502_mia PRIVATE
+target_include_directories(loci_mia PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/tinyusb/src
     mia
 )
 
-target_compile_definitions(rp6502_mia PRIVATE
+target_compile_definitions(loci_mia PRIVATE
     LFS_NO_MALLOC=1
     LFS_NAME_MAX=64
     #LFS_YES_TRACE=1
@@ -40,11 +40,11 @@ target_compile_definitions(rp6502_mia PRIVATE
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=32
 )
 
-target_compile_options(rp6502_mia PRIVATE
+target_compile_options(loci_mia PRIVATE
   -Wall -Wextra -Os
 )
 
-target_link_libraries(rp6502_mia PRIVATE
+target_link_libraries(loci_mia PRIVATE
     pico_stdlib
     pico_multicore
     pico_rand
@@ -58,11 +58,11 @@ target_link_libraries(rp6502_mia PRIVATE
 
 )
 
-pico_generate_pio_header(rp6502_mia
+pico_generate_pio_header(loci_mia
     ${CMAKE_CURRENT_LIST_DIR}/mia/sys/mia.pio
 )
 
-target_sources(rp6502_mia PRIVATE
+target_sources(loci_mia PRIVATE
     mia/main.c
     mia/str.c
     mia/api/api.c
@@ -113,7 +113,7 @@ target_sources(rp6502_mia PRIVATE
 # Please change name for hardware forks.
 # For release, set version string and set code page to 0.
 
-set_property(TARGET rp6502_mia
+set_property(TARGET loci_mia
     APPEND PROPERTY COMPILE_DEFINITIONS
     RP6502_NAME="Oric LOCI"
     RP6502_VERSION=""
@@ -124,9 +124,9 @@ set_property(TARGET rp6502_mia
     RP6502_EXFAT=0
 )
 
-get_target_property(RP6502_MIA_COMPILE_DEFINITIONS rp6502_mia COMPILE_DEFINITIONS)
+get_target_property(RP6502_MIA_COMPILE_DEFINITIONS loci_mia COMPILE_DEFINITIONS)
 if(RP6502_MIA_COMPILE_DEFINITIONS MATCHES "RP6502_VERSION=\"\"")
-    add_custom_command(TARGET rp6502_mia
+    add_custom_command(TARGET loci_mia
         COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_LIST_DIR}/mia/sys/sys.c
     )
 endif()
