@@ -48,3 +48,10 @@ char* usb_get_status(uint8_t dev_addr){
         return 0;
     }
 }
+
+void tuh_mount_cb(uint8_t idx)
+{
+    uint16_t vid, pid;
+    tuh_vid_pid_get(idx,&vid,&pid);
+    printf("USB %04X:%04X (%d) mounted\n", vid, pid, idx);
+}

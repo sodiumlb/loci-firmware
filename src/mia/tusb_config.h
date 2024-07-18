@@ -25,10 +25,11 @@ extern "C"
 #define CFG_TUH_CDC_CP210X (1)
 #define CFG_TUH_CDC_CH34X (1)
 #define CFG_TUH_HID (4)
-#define CFG_TUH_MSC (1)
+#define CFG_TUH_MSC (4)
 #define CFG_TUH_VENDOR (0)
 
-#define CFG_TUH_DEVICE_MAX (8)
+#define CFG_TUH_DEVICE_MAX (16)
+#define CFG_TUH_MAX_SPEED (OPT_MODE_FULL_SPEED)
 
 #define CFG_TUH_HID_EPIN_BUFSIZE (64)
 #define CFG_TUH_HID_EPOUT_BUFSIZE (64)

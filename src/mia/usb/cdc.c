@@ -105,19 +105,12 @@ void cdc_task(void)
     cdc_stdio_out_flush();
 }
 
-void tuh_mount_cb(uint8_t idx)
+void tuh_cdc_mount_cb(uint8_t idx)
 {
-    uint16_t vid, pid;
-    tuh_vid_pid_get(idx,&vid,&pid);
-    printf("USB %04X:%04X (%d) mounted\n", vid, pid, idx);
-    for(uint8_t i=0; i < CFG_TUH_CDC; i++){
-        if(tuh_cdc_mounted(i)){
-            //if(cdc_device_id == 0xFF)
-            //    cdc_device_id = i;
-            printf("CDC %d mounted\n", i);
-            usb_set_status(idx,"CDC device mounted");
-        }
-    }
+    tuh_itf_info_t itf_info = {0};
+    tuh_cdc_itf_get_info(idx, &itf_info);
+    usb_set_status(itf_info.daddr,"CDC device mounted");
+    printf("CDC (%d) mounted\n",itf_info.daddr);
 }
 
 void tuh_cdc_umount_cb(uint8_t idx)
