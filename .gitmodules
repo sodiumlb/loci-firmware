@@ -1,12 +1,20 @@
 [submodule "src/littlefs"]
 	path = src/littlefs
 	url = https://github.com/littlefs-project/littlefs.git
+	branch = master
+	update = merge
 [submodule "src/pico-sdk"]
 	path = src/pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk.git
+	branch = master
+	update = merge
 [submodule "src/pico-extras"]
 	path = src/pico-extras
 	url = https://github.com/picocomputer/pico-extras.git
+	branch = master
+	update = merge
 [submodule "src/tinyusb"]
 	path = src/tinyusb
 	url = https://github.com/hathach/tinyusb.git
+	branch = master
+	update = merge
