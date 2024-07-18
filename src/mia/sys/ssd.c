@@ -92,7 +92,7 @@ void ssd_write_text(uint8_t x, uint8_t y, bool invert, char *text){
 }
 
 static uint16_t ssd_cur_x = 0;
-static uint16_t ssd_cur_y = 0;
+static uint16_t ssd_cur_y = 1;  //Top line reserved for status
 
 int ssd_putc(char ch){
     if(ch == 0) return 0;
@@ -108,7 +108,16 @@ int ssd_putc(char ch){
         ssd_cur_y++;
     }
     if(ssd_cur_y >= SSD_FB_ROWS){
-        ssd_cur_y = 0;
+        //scroll
+        for(uint16_t i=(1*SSD_FB_WIDTH); i<((SSD_FB_ROWS-1)*SSD_FB_WIDTH); i++){
+            ssd_framebuffer[i] = ssd_framebuffer[i+SSD_FB_WIDTH];
+        }
+        //clear last line
+        for(uint16_t i=(SSD_FB_ROWS-1)*SSD_FB_WIDTH; i<(SSD_FB_ROWS*SSD_FB_WIDTH); i++ ){
+            ssd_framebuffer[i] = 0x00;
+        }
+        ssd_cur_y--;
+        //ssd_cur_y = 1;
     }
     return 0;
 }

@@ -320,7 +320,7 @@ int main(void)
         {
             run();
             main_state = running;
-            ssd_write_text(0,6,false,"RUNNING    ");
+            ssd_write_text(10,0,true,"RUN");
         }
         if (main_state == stopping)
         {
@@ -332,7 +332,7 @@ int main(void)
         {
             reset();
             is_breaking = false;
-            ssd_write_text(0,6,false,"reset      ");
+            ssd_write_text(10,0,true,"rst");
         }
     }
 }
