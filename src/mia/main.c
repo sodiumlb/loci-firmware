@@ -23,7 +23,7 @@
 #include "sys/cpu.h"
 #include "sys/led.h"
 #include "sys/lfs.h"
-//#include "sys/pix.h"
+#include "sys/pix.h"
 #include "sys/mia.h"
 #include "sys/pwr.h"
 #include "sys/ssd.h"
@@ -52,7 +52,7 @@ static void init(void)
     pwr_init();
     // STDIO not available until after these inits
     cpu_init();
-    //pix_init();
+    pix_init();
     //vga_init();
     ssd_init();
     mia_init();
@@ -134,7 +134,7 @@ static void stop(void)
     cpu_stop(); // Must be first
     //vga_stop(); // Must be before ria
     mia_stop();
-    //pix_stop();
+    pix_stop();
     std_stop();
     kbd_stop();
     mou_stop();
@@ -165,7 +165,7 @@ void main_reclock(uint32_t sys_clk_khz, uint16_t clkdiv_int, uint8_t clkdiv_frac
     //aud_reclock(sys_clk_khz);
 }
 
-// PIX XREG writes to the RIA device will notify here.
+// PIX XREG writes to the MIA device will notify here.
 bool main_pix(uint8_t ch, uint8_t addr, uint16_t word)
 {
     (void)addr;
@@ -188,7 +188,7 @@ bool main_api(uint8_t operation)
     switch (operation)
     {
     case 0x01:
-        //pix_api_xreg();
+        pix_api_xreg();
         break;
     case 0x02:
         cpu_api_phi2();

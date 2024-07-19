@@ -88,7 +88,7 @@ target_sources(loci_mia PRIVATE
     mia/sys/lfs.c
     mia/sys/mem.c
     mia/sys/mia.c
-#    mia/sys/pix.c
+    mia/sys/pix.c
     mia/sys/pwr.c
     mia/sys/sys.c
     mia/sys/ssd.c
