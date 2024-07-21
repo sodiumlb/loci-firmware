@@ -37,6 +37,19 @@ volatile uint32_t ssd_action_word;
 volatile uint32_t ssd_action_rword;
 volatile bool ssd_action_is_wr = false;
 
+typedef enum
+{
+    ansi_state_C0,
+    ansi_state_Fe,
+    ansi_state_SS2,
+    ansi_state_SS3,
+    ansi_state_CSI
+} ansi_state_t;
+
+#define SSD_CSI_PARAM_MAX_LEN 16
+static ansi_state_t ssd_ansi_state;
+static uint16_t ssd_csi_param[SSD_CSI_PARAM_MAX_LEN];
+static uint8_t ssd_csi_param_count;
 
 void ssd_tx_framebuffer(void){
     if(ssd_need_refresh && ssd_is_present){
@@ -91,18 +104,162 @@ void ssd_write_text(uint8_t x, uint8_t y, bool invert, char *text){
     }
 }
 
+
 static uint16_t ssd_cur_x = 0;
 static uint16_t ssd_cur_y = 1;  //Top line reserved for status
 
-int ssd_putc(char ch){
-    if(ch == 0) return 0;
-    if(ch == '\n'){
+//TODO This is a very poor interpretation of the ANSI escape code, adopted from the com.c module. Good enough for debug?
+static void ssd_line_state_C0(char ch){
+    if (ch == '\r'){
         ssd_cur_x = 0;
         ssd_cur_y++;
-    }else{
-        ssd_draw_char(ssd_cur_x, ssd_cur_y, false, ch);
-        ssd_cur_x++;
     }
+    else if (ch == '\33')
+        ssd_ansi_state = ansi_state_Fe;
+    else if (ch == '\b' || ch == 127)
+        ssd_cur_x--;
+    else if (ch == 1) // ctrl-a
+        ssd_cur_x = 0;
+    else if (ch == 2) // ctrl-b
+        ssd_cur_x--;
+    else if (ch == 5) // ctrl-e
+        ssd_cur_x = SSD_FB_COLS-1;
+    else if (ch == 6) // ctrl-f
+        ssd_cur_x++;
+    else{
+        if(ch >= 32){
+            ssd_draw_char(ssd_cur_x, ssd_cur_y, false, ch);
+            ssd_cur_x++;
+        }
+    }
+}
+
+static void ssd_line_state_Fe(char ch)
+{
+    if (ch == '[')
+    {
+        ssd_ansi_state = ansi_state_CSI;
+        ssd_csi_param_count = 0;
+        ssd_csi_param[0] = 0;
+    }
+    else if (ch == 'b' || ch == 2)
+    {
+        ssd_ansi_state = ansi_state_C0;
+        //NOP Don't have a buffer view
+        //com_line_backward_word();
+    }
+    else if (ch == 'f' || ch == 6)
+    {
+        ssd_ansi_state = ansi_state_C0;
+        //NOP Don't have a buffer view
+        //com_line_forward_word();
+    }
+    else if (ch == 'N')
+        ssd_ansi_state = ansi_state_SS2;
+    else if (ch == 'O')
+        ssd_ansi_state = ansi_state_SS3;
+    else
+    {
+        ssd_ansi_state = ansi_state_C0;
+        if (ch == 127)
+            ssd_cur_x--;
+    }
+}
+
+static void ssd_line_state_SS2(char ch)
+{
+    (void)ch;
+    ssd_ansi_state = ansi_state_C0;
+}
+
+static void ssd_line_state_SS3(char ch)
+{
+    ssd_ansi_state = ansi_state_C0;
+    if (ch == 'F')
+        ssd_cur_x = SSD_FB_COLS-1;
+    else if (ch == 'H')
+        ssd_cur_x = 0;
+}
+
+static void ssd_line_state_CSI(char ch)
+{
+    // Silently discard overflow parameters but still count to + 1.
+    if (ch >= '0' && ch <= '9')
+    {
+        if (ssd_csi_param_count < SSD_CSI_PARAM_MAX_LEN)
+        {
+            ssd_csi_param[ssd_csi_param_count] *= 10;
+            ssd_csi_param[ssd_csi_param_count] += ch - '0';
+        }
+        return;
+    }
+    if (ch == ';' || ch == ':')
+    {
+        if (++ssd_csi_param_count < SSD_CSI_PARAM_MAX_LEN)
+            ssd_csi_param[ssd_csi_param_count] = 0;
+        else
+            ssd_csi_param_count = SSD_CSI_PARAM_MAX_LEN;
+        return;
+    }
+    ssd_ansi_state = ansi_state_C0;
+    if (++ssd_csi_param_count > SSD_CSI_PARAM_MAX_LEN)
+        ssd_csi_param_count = SSD_CSI_PARAM_MAX_LEN;
+    if (ch == 'C')
+        ssd_cur_x++;
+    else if (ch == 'D')
+        ssd_cur_x--;
+    else if (ch == 'F')
+        ssd_cur_x = SSD_FB_COLS-1;
+    else if (ch == 'H')
+        ssd_cur_x = 0;
+    else if (ch == 'b' || ch == 2)
+        {}
+        //NOP Don't have a buffer view
+        //com_line_backward_word();
+    else if (ch == 'f' || ch == 6)
+        {}
+        //NOP Don't have a buffer view
+        //com_line_forward_word();
+    else if (ch == '~')
+        switch (ssd_csi_param[0])
+        {
+        case 1:
+        case 7:
+            ssd_cur_x = 0;
+            break;
+        case 4:
+        case 8:
+            ssd_cur_x = SSD_FB_COLS-1;
+            break;
+        case 3:
+            ssd_cur_x--;
+            break;
+        }
+}
+
+int ssd_putc(char ch){
+    if(ch == 0) return 0;
+    if(ch == '\30')
+        ssd_ansi_state = ansi_state_C0;
+    else
+        switch( ssd_ansi_state ){
+            case ansi_state_C0:
+                ssd_line_state_C0(ch);
+                break;
+            case ansi_state_Fe:
+                ssd_line_state_Fe(ch);
+                break;
+            case ansi_state_SS2:
+                ssd_line_state_SS2(ch);
+                break;
+            case ansi_state_SS3:
+                ssd_line_state_SS3(ch);
+                break;
+            case ansi_state_CSI:
+                ssd_line_state_CSI(ch);
+                break;
+        }
+    
     if(ssd_cur_x >= SSD_FB_COLS){
         ssd_cur_x = 0;
         ssd_cur_y++;
