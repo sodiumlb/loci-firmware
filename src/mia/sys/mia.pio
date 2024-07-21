@@ -6,6 +6,7 @@
  */
 
 ; Action sends a FIFO message for every read or write to a page
+; Action loop in mia.c decides on fine grained handling
 ; Page address to compare is stored in y at init
 .program mia_action
 
@@ -21,37 +22,91 @@ start:
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
     jmp start            ;
 iswrite:                 ;Writes needs data to be stable (phi2 high)
-    wait 1 gpio 25  [25]
+    wait 1 gpio 25  [20] ;Delay needed for stable data sampling
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
 ; Async ROM and IO data read emulation
-; Pindirs and OE handling is in io_read/rom_read progs
+; Pindirs and OE is selectively enabled in io_read/rom_read progs
+; then always dislabled here
 ; ROM cortex base addr in y
-; IO cortex base addr in x
+; IO data is pushed to output FIFO from action loop
 ; NB 16kB aliasing happends  
 
 .program mia_read_data
 .wrap_target
-    out pins 8           ;output Data (auto-pull)
+    out pins 8               ;output Data (auto-pull)
 .wrap
 
 .program mia_read_addr
 .side_set 1 opt
 isrom:
-    in pins 14      ;[7]    ;input address (auto-push)   
+    in pins 14               ;input address (auto-push)   
 .wrap_target
-    wait 1 gpio 25 ;[7]    ;wait for phi2 raising edge
-    pull noblock    ;[7]
+    wait 1 gpio 25           ;wait for phi2 raising edge
+    pull noblock
     ;mov x osr
-    out x 32        ;[7]     ;same as <mov x osr> but clears osr for later use as zero
-    wait 0 gpio 25 [7]          ;wait for phi2 falling edge + A setup-time
-    out pindirs 8 side 1 [7]     ;disable data output
-    mov isr x       [7]            ; ROM page cortex base address
-    jmp pin isrom  [7]             ; Test A[15] 0=IO 1=ROM
-;    mov isr y                   ; IO page cortex base address
+    out x 32                 ;same as <mov x osr> but clears osr for later use as zero
+    wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
+    out pindirs 8 side 1 [7] ;disable data output
+    mov isr x            [7] ; ROM page cortex base address
+    jmp pin isrom        [7] ; Test A[15] 0=IO 1=ROM
 .wrap
 
+;Waits for action loop in mia.c signaling read enable of data this cycle
+.program mia_io_read
+.side_set 1 opt
+
+.wrap_target
+start:
+    irq wait 5               ;wait on CPU signaling 
+    mov osr !null            ;prepare indirs
+    wait 1 gpio 25       [7] ;wait for phi2 raising edge
+    out pindirs 8 side 0     ;enable data output
+.wrap
+
+
+;Enabling 16kB ROM area reads
+;Address top bits are compared
+.program mia_rom_read
+.side_set 1 opt
+
+.wrap_target
+start:
+    wait 0 gpio 25      [7]  ;wait for phi2 falling edge
+    jmp pin start       [7]  ;RnW inverted. Pass on Read
+;    mov osr pins             ;collect pins
+;    out y 8                  ;select page
+;    jmp x!=y notio           ;pass if y = 0x03
+;    irq set 4                ;signal io_read program (0x03xx hit)
+notio:
+    wait 1 gpio 25      [0]  ;wait for phi2 raising edge
+    mov osr pins
+    out null 6
+    out y 2
+    jmp x!=y start           ;pass if y=3 
+    out null 9               ;spool out RnW,D[7:0]
+    out y 3                  ;collect MAP,DIR,Phi2
+    jmp x!=y start           ;if not MAP,DIR,Phi2 right then jump to start
+    mov osr !null       [7]  ;prepare pindirs = 0xff
+    out pindirs 8 side 0     ;enable data output and DIR B->A. disabled in mia_io_read
+.wrap
+
+; Oric MAP signal timing
+; Active for A[15:13]=X
+.program mia_map
+
+.wrap_target
+start:
+    wait 1 gpio 25     [10]
+    wait 0 gpio 25     [31]  ;wait for phi2 falling edge + A setup-time
+    mov osr pins             ;ca 70 cycles delay before setting MAP
+    out y 3                  ;get A[15:13]
+    jmp x!=y start     [25]  ;check matching address
+ismap:
+    set pins 1         [31]  ;Delay equals MAP pulse width
+    set pins 0  
+.wrap
 
 ; Enable "shadow" writing of the lower 1kB of Oric RAM also in XRAM
 .program mia_write
@@ -72,88 +127,4 @@ write_init:
     push noblock        ;address to FIFO
     out isr 8           ;collect data
     push noblock        ;Data to FIFO
-.wrap
-
-;Enabling IO reads for a particular 16 byte page (12 bits) typcially 0x310
-;Also backs off the last 4 addresses at 0xC-0xF
-.program mia_io_read
-.side_set 1 opt
-
-;.wrap_target
-;start:
-;    wait 1 irq 4                ;address check done elsewhere
-;    mov isr x                   ;enable flag array cortex address in x
-;    in pins 6                   ;auto-push - collect A[7:2] (4 regs per enable flag)
-;    pull block
-;    out y 1                     ;enable flag 
-;    jmp !y start                ;0:not enabled address 
-;    wait 1 gpio 25 [7]          ;wait for phi2 raising edge
-;    out pindirs 8   side 0      ;enable data output
-;.wrap
-
-.wrap_target
-start:
-    irq wait 5                  ;wait on CPU signaling 
-    mov osr !null               ;prepare indirs
-    wait 1 gpio 25 [7]          ;wait for phi2 raising edge
-    out pindirs 8   side 0      ;enable data output
-.wrap
-
-
-;Enabling 16kB ROM area reads
-;Address top bits are compared
-.program mia_rom_read
-.side_set 1 opt
-;.wrap_target
-;start:
-;    wait 0 gpio 25 [7] 
-;    wait 1 gpio 25 [7]       ;wait for phi2 raising edge
-;    mov osr pins             ;get pins from A14 
-;    out isr 2                ;collect A[15:14]
-;    out null 8               ;spool out D[7:0]
-;    in osr 4                 ;collect MAP,DIR,Phi2,RW
-;    mov y isr                
-;isread1:
-;    jmp x!=y start        ;if not X=!A[15:14] and MAP,DIR,Phi2,RW right then jump to start
-;isrom:
-;    mov osr !null
-;    out pindirs 8 side 0  [5]     ;enable data output and DIR B->A. disabled in mia_io_read
-;.wrap
-
-.wrap_target
-start:
-    wait 0 gpio 25 [7]              ;wait for phi2 falling edge
-    jmp pin start  [7]              ;RnW inverted. Pass on Read
-    ;set x 3        [7]              ;prepare x. delay is needed.
-    mov osr pins                    ;collect pins
-    out y 8
-    jmp x!=y notio                  ;pass if y = 0x03
-    irq set 4                       ;signal io_read program (0x03xx hit)
-notio:
-    wait 1 gpio 25 [0]              ;wait for phi2 raising edge
-    mov osr pins
-    out null 6
-    out y 2
-    jmp x!=y start                  ;pass if y=3 
-    out null 9                      ;spool out RnW,D[7:0]
-    out y 3                         ;collect MAP,DIR,Phi2
-    jmp x!=y start                  ;if not MAP,DIR,Phi2 right then jump to start
-    mov osr !null         [7]       ;prepare pindirs = 0xff
-    out pindirs 8 side 0            ;enable data output and DIR B->A. disabled in mia_io_read
-.wrap
-
-; Oric MAP signal timing
-; Active for A[15:13]=X
-.program mia_map
-
-.wrap_target
-start:
-    wait 1 gpio 25 [10]
-    wait 0 gpio 25 [31] ;wait for phi2 falling edge + A setup-time
-    mov osr pins        ;ca 70 cycles delay before setting MAP
-    out y 3             ;get A[15:13]
-    jmp x!=y start [25]     ;check matching address
-ismap:
-    set pins 1 [31]
-    set pins 0  
 .wrap
