@@ -467,10 +467,12 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             //        ssd_got_action_word = true;
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
                 //MIA_READ_PIO->txf[MIA_READ_DATA_SM] = oric_bank0[rw_data_addr & 0x0000FFFF];
-                (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)(0x20000000 | (rw_data_addr & 0xFFFF));
+                (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                 if((mia_iopage_enable_map >> ((rw_data_addr & 0x000000FC) >> 2)) & 0x1ULL)
                     MIA_IO_READ_PIO->irq = 1u << 5;
                 //dma_channel_set_read_addr(mia_read_dma_channel,&oric_bank0[rw_data_addr & 0xFFFF],true);
+            }else{  //Write - Saves having dedicated write PIO program
+                IOREGS(rw_data_addr & 0xFF) = (rw_data_addr >> 16) & 0xFF;
             }
           
             if (true)//((1u << CPU_RESB_PIN) & sio_hw->gpio_in))
@@ -1118,7 +1120,7 @@ void mia_init(void)
 
     // the inits
     mia_read_pio_init();
-    mia_write_pio_init();
+    //mia_write_pio_init();
     mia_io_read_pio_init();
     mia_rom_read_pio_init();
     mia_act_pio_init();

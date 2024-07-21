@@ -34,7 +34,11 @@ asm(".equ oric_bank2, 0x20008000");     //device rom
 asm(".equ oric_bank3, 0x2000C000");     //basic rom 
 
 //Oric IO space register address macro
-#define IOREGS(addr) oric_bank0[(addr)]
+// IO page and registers are located at the bottom of cpu1 stack.
+// cpu1 runs the action loop and uses very little stack.
+extern volatile uint8_t iopage[0x100];
+asm(".equ iopage, 0x20040000");
+#define IOREGS(addr) iopage[(addr) & 0xFF]
 #define IOREGSW(addr) ((uint16_t *)&IOREGS(addr))[0]
 
 // The xstack is:
@@ -45,13 +49,12 @@ asm(".equ oric_bank3, 0x2000C000");     //basic rom
 extern uint8_t xstack[];
 extern volatile size_t xstack_ptr;
 
-// RIA registers are located at the bottom of cpu1 stack.
-// cpu1 runs the action loop and uses very little stack.
-extern uint8_t regs[0x20];
+// MIA registers are located within the iopage memory
+extern volatile uint8_t regs[0x20];
 #define REGS(addr) regs[(addr) & 0x1F]
 #define REGSW(addr) ((uint16_t *)&REGS(addr))[0]
 //asm(".equ regs, 0x20040000");
-asm(".equ regs, 0x200003A0"); //TODO FISHY AS F
+asm(".equ regs, 0x200400A0");   //Oric address 0x03A0-0x03BF
 
 // Misc memory buffer for moving things around.
 // 6502 <-> RAM, USB <-> RAM, UART <-> RAM, etc.
