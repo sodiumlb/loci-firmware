@@ -116,12 +116,16 @@ static void ssd_line_state_C0(char ch){
     }
     else if (ch == '\33')
         ssd_ansi_state = ansi_state_Fe;
-    else if (ch == '\b' || ch == 127)
+    else if (ch == '\b' || ch == 127){ 
         ssd_cur_x--;
+        ssd_draw_char(ssd_cur_x, ssd_cur_y, false, ' ');
+    }
     else if (ch == 1) // ctrl-a
         ssd_cur_x = 0;
-    else if (ch == 2) // ctrl-b
+    else if (ch == 2){ // ctrl-b
         ssd_cur_x--;
+        ssd_draw_char(ssd_cur_x, ssd_cur_y, false, ' ');
+    }    
     else if (ch == 5) // ctrl-e
         ssd_cur_x = SSD_FB_COLS-1;
     else if (ch == 6) // ctrl-f
@@ -161,8 +165,10 @@ static void ssd_line_state_Fe(char ch)
     else
     {
         ssd_ansi_state = ansi_state_C0;
-        if (ch == 127)
+        if (ch == 127){
             ssd_cur_x--;
+            ssd_draw_char(ssd_cur_x, ssd_cur_y, false, ' ');
+        }        
     }
 }
 
