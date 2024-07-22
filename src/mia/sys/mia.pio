@@ -13,7 +13,7 @@
 start:
     wait 1 gpio 25  [15]
 .wrap_target
-    wait 0 gpio 25  [20] ;wait for phi2 negative edge + setup
+    wait 0 gpio 25  [29] ;wait for phi2 negative edge + setup
     mov osr pins
     out null 8           ;Spool out A[7:0]
     out x 8              ;Get page address A[15:8]
