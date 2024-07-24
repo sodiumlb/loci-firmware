@@ -30,47 +30,17 @@ static stdio_driver_t cdc_stdio_app = {
 
 void cdc_stdio_out_chars(const char *buf, int length)
 {
-    //TODO put in proper flow control when cable arrives
-        /*
-    if(cdc_device_id != 0xFF){
-        bool xoff = false;
-        //char info[32];
-        //int slen = sprintf(info,"<%d>",length);
-        //tuh_cdc_write(cdc_device_id,info,slen);
-        for(int i=0; i < length; i++){
-            do{
-                uint8_t ch = 0;
-                tuh_cdc_peek(cdc_device_id,&ch);
-                if(ch == 0x11){
-                    xoff = false;
-                    tuh_cdc_read(cdc_device_id,&ch,1);
-                }
-                if(ch == 0x13){
-                    xoff = true;
-                    tuh_cdc_read(cdc_device_id,&ch,1);
-                }
-            }while(xoff);
-            //while(tuh_cdc_write_available(cdc_device_id)==0){
-                //tuh_cdc_write_flush(cdc_device_id);
-            //}
-            tuh_cdc_write(cdc_device_id,(unsigned char*)(buf+i),1);   
-        }
-        */
-       /* 
-        int sent = 0;
-        while(sent < length){
-            sent += tuh_cdc_write(cdc_device_id,(const char *)(buf+sent),length-sent);
-            tuh_cdc_write_flush(cdc_device_id);
-        }
-        */
-    //}
-    
 
     for(uint8_t i=0; i < CFG_TUH_CDC; i++){
         if(tuh_cdc_mounted(i)){
-            tuh_cdc_write(i,buf,length);
+            int sent = 0;
+            do {
+                sent += tuh_cdc_write(i,(const char *)(buf+sent),length-sent);
+                if(sent < length)
+                    tuh_task();     //TODO This is brute force. Any nicer options?
+            } while(sent < length);
         }
-    }  
+    }
 }
 
 void cdc_stdio_out_flush(void)
