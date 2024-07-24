@@ -256,6 +256,9 @@ bool main_api(uint8_t operation)
     case 0xA0:
         mia_api_boot();
         break;
+    case 0xA1:
+        map_api_tune();
+        break;
     default:
         return false;
     }

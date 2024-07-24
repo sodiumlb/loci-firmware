@@ -1119,12 +1119,12 @@ void mia_init(void)
     mia_boot_settings = 0;
 
     // the inits
+    mia_map_pio_init(); //Must be first for MAP tuning
     mia_read_pio_init();
     //mia_write_pio_init();
     mia_io_read_pio_init();
     mia_rom_read_pio_init();
     mia_act_pio_init();
-    mia_map_pio_init();
 }
 
 void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac)

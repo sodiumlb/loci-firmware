@@ -22,4 +22,6 @@ void map_stop();
 // Trigger IRQ when enabled
 void map_trigger_irq(void);
 
+void map_api_tune(void);
+
 #endif /* _MAP_H_ */
