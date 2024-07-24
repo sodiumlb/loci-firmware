@@ -424,8 +424,12 @@ void dsk_task(void){
                                                     || dsk_next_track != dsk_active.track)){  
                     dsk_flush_track();
                 }
-                dsk_set_active_drive(drive);
-                dsk_set_active_side(side);
+
+                if(is_cmd){                         //Only trigger drive/side change together with command 
+                    dsk_set_active_drive(drive);
+                    dsk_set_active_side(side);
+                }
+
                 if(is_cmd && dsk_active.buf_update_needed){     //Only trigger track update when BUSY
                     dsk_set_active_track(dsk_active.track);
                     dsk_active.buf_update_needed = false;
