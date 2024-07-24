@@ -33,12 +33,15 @@ void cdc_stdio_out_chars(const char *buf, int length)
 
     for(uint8_t i=0; i < CFG_TUH_CDC; i++){
         if(tuh_cdc_mounted(i)){
+            tuh_cdc_write(i, buf, length);
+            /*
             int sent = 0;
             do {
                 sent += tuh_cdc_write(i,(const char *)(buf+sent),length-sent);
                 if(sent < length)
                     tuh_task();     //TODO This is brute force. Any nicer options?
             } while(sent < length);
+            */
         }
     }
 }
