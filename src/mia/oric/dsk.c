@@ -165,9 +165,9 @@ bool dsk_set_active_track(uint32_t track){
     }
     dsk_active.track = track;
     dsk_active.track_writeback = false;
-    char tr_status[8];
-    sprintf(tr_status,"[%ld:%02ld]",dsk_active.side,track);
-    ssd_write_text(15,0,true,tr_status);
+    char tr_status[10];
+    sprintf(tr_status,"[%c:%ld:%02ld]", 'A' + dsk_active.drive_num, dsk_active.side, track);
+    ssd_write_text(13,0,true,tr_status);
     return true;
 }
 
@@ -196,7 +196,7 @@ bool dsk_flush_track(void){
             break;
     }
     dsk_active.track_writeback = false;
-    //printf("##WTRACK %d##",dsk_active.track);
+    printf("##WTRACK [%c:%ld:%02ld]##\n",'A' + dsk_active.drive_num, dsk_active.side, dsk_active.track);
     return true;
 }
 
