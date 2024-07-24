@@ -33,7 +33,7 @@
 #include "usb/kbd.h"
 #include "usb/mou.h"
 #include "usb/cdc.h"
-
+#include "usb/msc.h"
 #include "oric/map.h"
 #include "oric/dsk.h"
 #include "oric/tap.h"
@@ -76,6 +76,7 @@ static void init(void)
     rom_init();
     led_init();
     clk_init();
+    msc_init();
 
     // TinyUSB
     tuh_init(TUH_OPT_RHPORT);
@@ -116,6 +117,7 @@ static void task(void)
     ssd_task();
     dsk_task();
     tap_task();
+    msc_task();
 }
 
 // Event to start running the 6502.
