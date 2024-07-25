@@ -19,6 +19,7 @@
 #include "oric/dsk.h"
 #include "fatfs/ff.h"
 #include "usb/mou.h"
+#include "locifw_version.h"
 
 #ifdef HW_REV_1_1
 //PCA9557
@@ -140,6 +141,12 @@ void ext_task(void)
         case EXT_LOADING_BIOS:
             if(!rom_active()){
                 ext_state = EXT_IDLE;
+                //TODO saver decision for patching in version number
+                if(xram[0xFFF7]==0xF0 && xram[0xFFF8]==0xF1 && xram[0xFFF9]==0xF2){
+                    xram[0xFFF7] = LOCIFW_VERSION_PATCH;
+                    xram[0xFFF8] = LOCIFW_VERSION_MINOR;
+                    xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
+                }
                 main_run();
               }
             break;
