@@ -187,10 +187,10 @@ static const char __in_flash("helptext") hlp_text_code_page[] =
     "437, 720, 737, 771, 775, 850, 852, 855, 857, 860, 861, 862, 863, 864, 865,\n"
     "866, 869, 932, 936, 949, 950.  Code pages 720, 932, 936, 949, 950 do not have\n"
     "VGA fonts."
-#if RP6502_CODE_PAGE
+#if LOCIFW_CODE_PAGE
 #define xstr(s) str(s)
 #define str(s) #s
-    "\nThis is a development build. Only " xstr(RP6502_CODE_PAGE) " is available.";
+    "\nThis is a development build. Only " xstr(LOCIFW_CODE_PAGE) " is available.";
 #else
     "";
 #endif

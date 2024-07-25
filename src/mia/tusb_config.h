@@ -17,9 +17,13 @@ extern "C"
 #define CFG_TUSB_MEM_ALIGN __attribute__((aligned(4)))
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_HOST
 
-#define CFG_TUH_ENUMERATION_BUFSIZE (256)
+#define CFG_TUH_ENUMERATION_BUFSIZE (1024)
 
-#define CFG_TUH_HUB (1)
+//#define CFG_TUSB_DEBUG (1)
+//#define CFG_TUH_LOG_LEVEL 1
+//#define CFG_TUH_CDC_LOG_LEVEL 3
+
+#define CFG_TUH_HUB (2)
 #define CFG_TUH_CDC (2)
 #define CFG_TUH_CDC_FTDI (1)
 #define CFG_TUH_CDC_CP210X (1)
@@ -28,8 +32,10 @@ extern "C"
 #define CFG_TUH_MSC (4)
 #define CFG_TUH_VENDOR (0)
 
-#define CFG_TUH_DEVICE_MAX (16)
+#define CFG_TUH_DEVICE_MAX (8)
+#define CFG_TUH_ENDPOINT_MAX (16)
 #define CFG_TUH_MAX_SPEED (OPT_MODE_FULL_SPEED)
+//#define TUD_OPT_RP2040_USB_DEVICE_UFRAME_FIX 1
 
 #define CFG_TUH_HID_EPIN_BUFSIZE (64)
 #define CFG_TUH_HID_EPOUT_BUFSIZE (64)

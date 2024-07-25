@@ -84,7 +84,7 @@
 / Locale and Namespace Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_CODE_PAGE	RP6502_CODE_PAGE
+#define FF_CODE_PAGE	LOCIFW_CODE_PAGE
 /* This option specifies the OEM code page to be used on the target system.
 /  Incorrect code page setting can cause a file open failure.
 /
@@ -203,7 +203,7 @@
 /  GET_SECTOR_SIZE command. */
 
 
-#define FF_LBA64		RP6502_EXFAT
+#define FF_LBA64		LOCIFW_EXFAT
 /* This option switches support for 64-bit LBA. (0:Disable or 1:Enable)
 /  To enable the 64-bit LBA, also exFAT needs to be enabled. (FF_FS_EXFAT == 1) */
 
@@ -231,7 +231,7 @@
 /  buffer in the filesystem object (FATFS) is used for the file data transfer. */
 
 
-#define FF_FS_EXFAT		RP6502_EXFAT
+#define FF_FS_EXFAT		LOCIFW_EXFAT
 /* This option switches support for exFAT filesystem. (0:Disable or 1:Enable)
 /  To enable exFAT, also LFN needs to be enabled. (FF_USE_LFN >= 1)
 /  Note that enabling exFAT discards ANSI C (C89) compatibility. */

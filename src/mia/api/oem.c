@@ -10,9 +10,9 @@
 //pix#include "sys/pix.h"
 #include "fatfs/ff.h"
 
-// Only the code page specified by RP6502_CODE_PAGE is installed to flash.
-// To include all code pages, set RP6502_CODE_PAGE to 0 (CMmakeLists.txt).
-// This is the default for when RP6502_CODE_PAGE == 0.
+// Only the code page specified by LOCIFW_CODE_PAGE is installed to flash.
+// To include all code pages, set LOCIFW_CODE_PAGE to 0 (CMmakeLists.txt).
+// This is the default for when LOCIFW_CODE_PAGE == 0.
 #define DEFAULT_CODE_PAGE 850
 
 void oem_init(void)
@@ -22,9 +22,9 @@ void oem_init(void)
 
 static uint16_t oem_find_codepage(uint16_t cp)
 {
-#if RP6502_CODE_PAGE
+#if LOCIFW_CODE_PAGE
     (void)cp;
-    return RP6502_CODE_PAGE;
+    return LOCIFW_CODE_PAGE;
 #else
     FRESULT result;
     if (cp)

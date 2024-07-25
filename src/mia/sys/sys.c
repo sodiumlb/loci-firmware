@@ -14,9 +14,9 @@
 
 static void sys_print_status(void)
 {
-    puts(RP6502_NAME);
-    if (strlen(RP6502_VERSION))
-        puts("MIA Version " RP6502_VERSION);
+    puts(LOCIFW_NAME);
+    if (strlen(LOCIFW_VERSION))
+        puts("LOCI firmware " LOCIFW_VERSION);
     else
         puts("MIA " __DATE__ " " __TIME__);
 }
