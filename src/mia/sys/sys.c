@@ -15,10 +15,11 @@
 static void sys_print_status(void)
 {
     puts(LOCIFW_NAME);
-    if (strlen(LOCIFW_VERSION))
+    #ifdef LOCIFW_VERSION
         puts("LOCI firmware " LOCIFW_VERSION);
-    else
+    #else
         puts("MIA " __DATE__ " " __TIME__);
+    #endif
 }
 
 void sys_mon_reboot(const char *args, size_t len)

@@ -336,7 +336,11 @@ void ssd_init(void)
     }
     if(ssd_is_present){
         i2c_write_blocking(EXT_I2C, ssd_i2c_addr, ssd_init_commands, 26, false);
-        ssd_write_text(0,0,true, LOCIFW_NAME " " LOCIFW_VERSION);
+        #ifdef LOCIFW_VERSION
+            ssd_write_text(0,0,true, LOCIFW_VERSION);
+        #else
+            ssd_write_text(0,0,true, __DATE__);
+        #endif
         //ssd_write_text(0,1,false, "ABCDEFGHIJKLMNOPQRSTUV");
         //ssd_write_text(0,2,false, "WXYZ01234567890abcdefg");
         //ssd_write_text(0,3,false, "hijklmnopqrstuvwxyz");

@@ -141,11 +141,22 @@ void ext_task(void)
         case EXT_LOADING_BIOS:
             if(!rom_active()){
                 ext_state = EXT_IDLE;
-                //TODO saver decision for patching in version number
+                //TODO safer decision for patching in version number
                 if(xram[0xFFF7]==0xF0 && xram[0xFFF8]==0xF1 && xram[0xFFF9]==0xF2){
-                    xram[0xFFF7] = LOCIFW_VERSION_PATCH;
-                    xram[0xFFF8] = LOCIFW_VERSION_MINOR;
-                    xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
+                    #ifdef LOCIFW_VERSION
+                    {
+                        xram[0xFFF7] = LOCIFW_VERSION_PATCH;
+                        xram[0xFFF8] = LOCIFW_VERSION_MINOR;
+                        xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
+                    }
+                    #else
+                    {
+                        //TODO Set date instead?
+                        xram[0xFFF7] = 0;
+                        xram[0xFFF8] = 0;
+                        xram[0xFFF9] = 0;
+                    }
+                    #endif
                 }
                 main_run();
               }

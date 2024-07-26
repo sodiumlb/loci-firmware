@@ -117,13 +117,19 @@ target_sources(loci-firmware PRIVATE
 set_property(TARGET loci-firmware
     APPEND PROPERTY COMPILE_DEFINITIONS
     LOCIFW_NAME="Oric LOCI"
-    LOCIFW_VERSION=\"${LOCIFW_VERSION}\"
     LOCIFW_CODE_PAGE=850
     LOCIFW_KEYBOARD=EN_US
     LOCIFW_MIN_PHI2=500
     LOCIFW_MAX_PHI2=8000
     LOCIFW_EXFAT=1
 )
+if(DEFINED LOCIFW_VERSION)
+    set_property(TARGET loci-firmware
+        APPEND PROPERTY COMPILE_DEFINITIONS
+        LOCIFW_VERSION=\"${LOCIFW_VERSION}\"
+    )
+endif()
+
 
 configure_file(mia/locifw_version.h.in locifw_version.h)
 
