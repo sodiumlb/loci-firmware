@@ -13,7 +13,7 @@ static void set_print_phi2(void)
 {
     uint32_t phi2_khz = cfg_get_phi2_khz();
     printf("PHI2: %ld kHz", phi2_khz);
-    if (phi2_khz < RP6502_MIN_PHI2 || phi2_khz > RP6502_MAX_PHI2)
+    if (phi2_khz < LOCIFW_MIN_PHI2 || phi2_khz > LOCIFW_MAX_PHI2)
         printf(" (!!!)");
     printf("\n");
 }
@@ -138,8 +138,8 @@ static void set_caps(const char *args, size_t len)
 
 static void set_print_code_page()
 {
-#if (RP6502_CODE_PAGE)
-    printf("CP  : %d (dev)\n", RP6502_CODE_PAGE);
+#if (LOCIFW_CODE_PAGE)
+    printf("CP  : %d (dev)\n", LOCIFW_CODE_PAGE);
 #else
     printf("CP  : %d\n", cfg_get_codepage());
 #endif

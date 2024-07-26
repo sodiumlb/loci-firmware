@@ -19,6 +19,7 @@
 #include "oric/dsk.h"
 #include "fatfs/ff.h"
 #include "usb/mou.h"
+#include "locifw_version.h"
 
 #ifdef HW_REV_1_1
 //PCA9557
@@ -140,6 +141,23 @@ void ext_task(void)
         case EXT_LOADING_BIOS:
             if(!rom_active()){
                 ext_state = EXT_IDLE;
+                //TODO safer decision for patching in version number
+                if(xram[0xFFF7]==0xF0 && xram[0xFFF8]==0xF1 && xram[0xFFF9]==0xF2){
+                    #ifdef LOCIFW_VERSION
+                    {
+                        xram[0xFFF7] = LOCIFW_VERSION_PATCH;
+                        xram[0xFFF8] = LOCIFW_VERSION_MINOR;
+                        xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
+                    }
+                    #else
+                    {
+                        //TODO Set date instead?
+                        xram[0xFFF7] = 0;
+                        xram[0xFFF8] = 0;
+                        xram[0xFFF9] = 0;
+                    }
+                    #endif
+                }
                 main_run();
               }
             break;
@@ -158,9 +176,9 @@ void ext_task(void)
     if(!main_active()){
         if(ext_btn_released(EXT_BTN_A)){
             if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
-                rom_mon_load("loci_rom.rp6502", 15);    //First ROM priority: USB storage
+                rom_mon_load("locirom.rp6502", 14);    //First ROM priority: USB storage
                 if(!rom_active()){
-                    rom_load("LOCI_ROM",8);             //Second ROM priority: new name in flash
+                    rom_load("LOCIROM",7);             //Second ROM priority: new name in flash
                 }
                 if(!rom_active()){
                     rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash

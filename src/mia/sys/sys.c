@@ -14,11 +14,12 @@
 
 static void sys_print_status(void)
 {
-    puts(RP6502_NAME);
-    if (strlen(RP6502_VERSION))
-        puts("MIA Version " RP6502_VERSION);
-    else
+    puts(LOCIFW_NAME);
+    #ifdef LOCIFW_VERSION
+        puts("LOCI firmware " LOCIFW_VERSION);
+    #else
         puts("MIA " __DATE__ " " __TIME__);
+    #endif
 }
 
 void sys_mon_reboot(const char *args, size_t len)

@@ -43,7 +43,7 @@ static uint8_t kbd_xram_keys[32];
 #define HID_KEYCODE_TO_UNICODE_(kb) HID_KEYCODE_TO_UNICODE_##kb
 #define HID_KEYCODE_TO_UNICODE(kb) HID_KEYCODE_TO_UNICODE_(kb)
 static DWORD const __in_flash("keycode_to_unicode")
-    KEYCODE_TO_UNICODE[128][3] = {HID_KEYCODE_TO_UNICODE(RP6502_KEYBOARD)};
+    KEYCODE_TO_UNICODE[128][3] = {HID_KEYCODE_TO_UNICODE(LOCIFW_KEYBOARD)};
 
 void kbd_hid_leds_dirty()
 {
