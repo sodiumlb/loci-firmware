@@ -48,9 +48,10 @@ lfs_dir_t dir_lfs[DIR_LFS_MAX] = {0};
 bool dir_lfs_open[DIR_LFS_MAX] = {0};
 DIR dir_fat[DIR_FAT_MAX] = {0};
 
+#define DIR_FN_LEN 64
 struct dir_dirent {
     int16_t d_fd;
-    uint8_t d_name[64];
+    uint8_t d_name[DIR_FN_LEN];
     uint8_t d_attrib;
     uint16_t d_size;
 };
@@ -138,7 +139,15 @@ void dir_api_readdir(void){
         //printf("[%s]",fno.fname);
         dirent.d_fd = fd;
         dirent.d_attrib = fno.fattrib;
-        strncpy((char*)dirent.d_name, fno.fname, 64); 
+        if(strlen(fno.fname) >= DIR_FN_LEN){
+            if(fno.altname[0]){
+                strcpy((char*)dirent.d_name, fno.altname);
+            }else{  //No altname - all options bad?
+                snprintf((char*)dirent.d_name, DIR_FN_LEN, "!Long name %s", fno.fname);
+            }
+        }else{
+            strncpy((char*)dirent.d_name, fno.fname, DIR_FN_LEN);
+        } 
         dirent.d_size = fno.fsize;
     }else if(fd >= FD_OFFS_LFS){
         lfs_dir_t *dp = &dir_lfs[fd - FD_OFFS_LFS];
@@ -149,7 +158,11 @@ void dir_api_readdir(void){
             return api_return_errno(API_ELFSFS(lfs_result));
         dirent.d_fd = fd;
         dirent.d_attrib = (info.type == LFS_TYPE_DIR ? AM_DIR : 0x00 ); //Using FAT attributes TODO Read-only flag
-        strncpy((char*)dirent.d_name, info.name, 64);
+        if(strlen(info.name) >= DIR_FN_LEN){
+            snprintf((char*)dirent.d_name, DIR_FN_LEN, "!Long name %s", info.name);
+        }else{
+            strncpy((char*)dirent.d_name, info.name, DIR_FN_LEN);
+        } 
         dirent.d_size = info.size;
     }else{ //Device list
         dirent.d_fd = 0;
