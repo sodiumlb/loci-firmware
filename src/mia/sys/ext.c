@@ -189,9 +189,6 @@ void ext_task(void)
                 if(!rom_active()){
                     rom_load("LOCIROM",7);             //Second ROM priority: new name in flash
                 }
-                if(!rom_active()){
-                    rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash
-                }
                 if(rom_active()){
                     ext_state = EXT_LOADING_BIOS;
                 }
