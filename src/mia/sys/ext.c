@@ -20,6 +20,7 @@
 #include "fatfs/ff.h"
 #include "usb/mou.h"
 #include "locifw_version.h"
+#include "loci_roms.h"
 
 #ifdef HW_REV_1_1
 //PCA9557
@@ -67,6 +68,30 @@ void ext_update(void);
 bool ext_get_cached(uint8_t pin);
 bool ext_btn_pressed(uint8_t pin);
 bool ext_btn_released(uint8_t pin);
+
+void ext_embedded_rom(const uint8_t* data, const uint32_t len, uint16_t xram_addr){
+    memcpy((void*)(&xram[xram_addr]), (void*)data, len);
+}
+
+void ext_patch_version(void){
+    //TODO safer decision for patching in version number
+    if(xram[0xFFF7]==0xF0 && xram[0xFFF8]==0xF1 && xram[0xFFF9]==0xF2){
+        #ifdef LOCIFW_VERSION
+        {
+            xram[0xFFF7] = LOCIFW_VERSION_PATCH;
+            xram[0xFFF8] = LOCIFW_VERSION_MINOR;
+            xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
+        }
+        #else
+        {
+            //TODO Set date instead?
+            xram[0xFFF7] = 0;
+            xram[0xFFF8] = 0;
+            xram[0xFFF9] = 0;
+        }
+        #endif
+    }
+}
 
 void ext_init(void)
 {
@@ -141,23 +166,7 @@ void ext_task(void)
         case EXT_LOADING_BIOS:
             if(!rom_active()){
                 ext_state = EXT_IDLE;
-                //TODO safer decision for patching in version number
-                if(xram[0xFFF7]==0xF0 && xram[0xFFF8]==0xF1 && xram[0xFFF9]==0xF2){
-                    #ifdef LOCIFW_VERSION
-                    {
-                        xram[0xFFF7] = LOCIFW_VERSION_PATCH;
-                        xram[0xFFF8] = LOCIFW_VERSION_MINOR;
-                        xram[0xFFF9] = LOCIFW_VERSION_MAJOR;
-                    }
-                    #else
-                    {
-                        //TODO Set date instead?
-                        xram[0xFFF7] = 0;
-                        xram[0xFFF8] = 0;
-                        xram[0xFFF9] = 0;
-                    }
-                    #endif
-                }
+                ext_patch_version();
                 main_run();
               }
             break;
@@ -183,7 +192,16 @@ void ext_task(void)
                 if(!rom_active()){
                     rom_load("CUMINIROM",9);            //Third ROM priority: old name in flash
                 }
-                ext_state = EXT_LOADING_BIOS;
+                if(rom_active()){
+                    ext_state = EXT_LOADING_BIOS;
+                }
+#ifdef EMBEDDED_LOCIROM
+                else{
+                    ext_embedded_rom(locirom, locirom_size, 0xC000);
+                    ext_patch_version();
+                    main_run();
+                }
+#endif
             }
         }
     }else{

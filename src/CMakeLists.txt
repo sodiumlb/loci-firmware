@@ -15,6 +15,34 @@ target_sources(tinyusb_mia PRIVATE
 )
 
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
+# Creates C resources file from files in given directory
+function(create_resources dir output)
+    message(STATUS "Create Resource ${dir} ${output}")
+    # Create empty output file
+    file(WRITE ${output} "")
+    # Collect input files
+    file(GLOB bins ${dir}/*)
+    # Iterate through input files
+    foreach(bin ${bins})
+        message(STATUS "Adding ${bin}")
+        # Get short filename
+        string(REGEX MATCH "([^/]+)$" filename ${bin})
+        # Replace filename spaces & extension separator for C compatibility
+        string(REGEX REPLACE "\\.| |-" "_" filename ${filename})
+        # Read hex data from file
+        file(READ ${bin} filedata HEX)
+        # Convert hex data for C compatibility
+        string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," filedata ${filedata})
+        # Prepare filename part of define
+        string(TOUPPER ${filename} filetoken)
+        # Create define
+        string(CONCAT definetoken "EMBEDDED_" ${filetoken})
+        # Append data to output file
+        file(APPEND ${output} "#define ${definetoken}\nconst unsigned char __in_flash() ${filename}[] = {${filedata}};\nconst unsigned ${filename}_size = sizeof(${filename});\n")
+    endforeach()
+endfunction()
+
+create_resources(${CMAKE_CURRENT_LIST_DIR}/roms ${CMAKE_BINARY_DIR}/loci_roms.h)
 
 # The Oric LOCI MIA (media interface adapter)
 
