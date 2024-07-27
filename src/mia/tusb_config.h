@@ -40,8 +40,9 @@ extern "C"
 #define CFG_TUH_HID_EPIN_BUFSIZE (64)
 #define CFG_TUH_HID_EPOUT_BUFSIZE (64)
 
-#define CFG_TUD_CDC_RX_BUFSIZE 64
-#define CFG_TUD_CDC_TX_BUFSIZE 64
+#define CFG_TUH_CDC_RX_BUFSIZE 64
+//Needs to be big enough to hold all stdio output before next call to tuh_task() 
+#define CFG_TUH_CDC_TX_BUFSIZE 2048
 
 #define CFG_TUH_CDC_LINE_CONTROL_ON_ENUM (0x03)
 //#define CFG_TUH_CDC_LINE_CODING_ON_ENUM { 115200, CDC_LINE_CODING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
