@@ -74,17 +74,15 @@ bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const *cb_dat
 
 
 void msc_task(void){
-    /*
     if(msc_inquiry_map && !msc_inquiry_busy){
-        for(int i=1; i<32; i++){
-            if(msc_inquiry_map & (1<<i)){
-                msc_inquiry_map ^= (1<<i);
+        for(int i=1; i < CFG_TUH_DEVICE_MAX; i++){
+            if(msc_inquiry_map & (1u<<i)){
+                msc_inquiry_map ^= (1u<<i);
                 msc_inquiry_busy = true;
                 tuh_msc_inquiry(i, 0, &msc_inquiry_resp, inquiry_complete_cb, 0);
             }
         }
     }
-    */
 }
 
 
@@ -92,8 +90,8 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 {
     uint8_t const lun = 0;
     usb_set_status(dev_addr, "MSC mounted, inquiring");
-    tuh_msc_inquiry(dev_addr, lun, &msc_inquiry_resp, inquiry_complete_cb, 0);
-    //msc_inquiry_map |= (1<<dev_addr);
+    //tuh_msc_inquiry(dev_addr, lun, &msc_inquiry_resp, inquiry_complete_cb, 0);
+    msc_inquiry_map |= (1u<<dev_addr);
 }
 
 void tuh_msc_umount_cb(uint8_t dev_addr)
