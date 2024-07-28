@@ -102,7 +102,7 @@ start:
     mov osr pins             ;ca 70 cycles delay before setting MAP
     out y 3                  ;get A[15:13]
     jmp x!=y start     [20]  ;check matching address
-    nop                [15]  ;<- MAP/RV1 timing adjust 0-31
+    nop                [10]  ;<- MAP/RV1 timing adjust 0-31
 ismap:
     set pins 1         [30]  ;Delay equals MAP pulse width
     set pins 0  
