@@ -186,6 +186,111 @@ static void set_vga(const char *args, size_t len)
     set_print_vga();
 }
 
+static void set_print_map_delay(void)
+{
+    printf("TMAP: %d\n", cfg_get_map_delay());
+}
+
+static void set_map_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_map_delay(delay);
+    }
+    set_print_map_delay();
+}
+
+static void set_print_io_write_delay(void)
+{
+    printf("TIOW: %d\n", cfg_get_io_write_delay());
+}
+
+static void set_io_write_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_io_write_delay(delay);
+    }
+    set_print_io_write_delay();    
+}
+
+static void set_print_io_read_delay(void)
+{
+    printf("TIOR: %d\n", cfg_get_io_read_delay());
+}
+
+static void set_io_read_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_io_read_delay(delay);
+    }
+    set_print_io_read_delay();    
+}
+
+static void set_print_io_data_delay(void)
+{
+    printf("TIOD: %d\n", cfg_get_io_data_delay());
+}
+
+static void set_io_data_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_io_data_delay(delay);
+    }
+    set_print_io_data_delay();
+}
+
+static void set_print_read_addr_delay(void)
+{
+    printf("TADR: %d\n", cfg_get_read_addr_delay());
+}
+
+static void set_read_addr_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_read_addr_delay(delay);
+    }
+    set_print_read_addr_delay();
+}
+
 typedef void (*set_function)(const char *, size_t);
 static struct
 {
@@ -199,6 +304,10 @@ static struct
     {4, "boot", set_boot},
     {2, "cp", set_code_page},
     {3, "vga", set_vga},
+    {4, "tmap", set_map_delay},
+    {4, "tiow", set_io_read_delay},
+    {4, "tior", set_io_write_delay},
+    {4, "tadr", set_read_addr_delay},
 };
 static const size_t SETTERS_COUNT = sizeof SETTERS / sizeof *SETTERS;
 
@@ -210,6 +319,11 @@ static void set_print_all(void)
     set_print_boot();
     set_print_code_page();
     set_print_vga();
+    set_print_map_delay();
+    set_print_io_write_delay();
+    set_print_io_read_delay();
+    set_print_io_data_delay();
+    set_print_read_addr_delay();
 }
 
 void set_mon_set(const char *args, size_t len)

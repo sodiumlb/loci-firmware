@@ -19,9 +19,14 @@
 // +R0         | RESB
 // +S437       | Code Page
 // +D0         | VGA display type
+// +TM10       | MAP signal timing 0-31
+// +TR0        | IO Read signal timing 0-31
+// +TW0        | IO Write signal timing 0-31
+// +TD0        | IO Data signal timing 0-7
+// +TA0        | ROM Read address signal timing 0-7
 // BASIC       | Boot ROM - Must be last
 
-#define CFG_VERSION 1
+#define CFG_VERSION 2
 static const char filename[] = "CONFIG.SYS";
 
 static uint32_t cfg_phi2_khz;
@@ -29,6 +34,11 @@ static uint8_t cfg_reset_ms;
 static uint8_t cfg_caps;
 static uint32_t cfg_codepage;
 static uint8_t cfg_vga_display;
+static uint8_t cfg_map_delay;
+static uint8_t cfg_io_read_delay;
+static uint8_t cfg_io_write_delay;
+static uint8_t cfg_io_data_delay;
+static uint8_t cfg_read_addr_delay;
 
 // Optional string can replace boot string
 static void cfg_save_with_boot_opt(char *opt_str)
@@ -67,6 +77,11 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                "+C%d\n"
                                "+S%d\n"
                                "+D%d\n"
+                               "+TM%d\n"
+                               "+TR%d\n"
+                               "+TW%d\n"
+                               "+TD%d\n"
+                               "+TA%d\n"
                                "%s",
                                CFG_VERSION,
                                cfg_phi2_khz,
@@ -74,6 +89,11 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                cfg_caps,
                                cfg_codepage,
                                cfg_vga_display,
+                               cfg_map_delay,
+                               cfg_io_read_delay,
+                               cfg_io_write_delay,
+                               cfg_io_data_delay,
+                               cfg_read_addr_delay,
                                opt_str);
         if (lfsresult < 0)
             printf("?Unable to write %s contents (%d)\n", filename, lfsresult);
@@ -130,6 +150,30 @@ static void cfg_load_with_boot_opt(bool boot_only)
             default:
                 break;
             }
+        str = (char *)mbuf + 3;
+        len -= 1;
+        if (!boot_only && mbuf[1]=='T' && parse_uint32(&str, &len, &val)){
+            switch (mbuf[2])
+            {
+            case 'M':
+                cfg_map_delay = val;
+                break;
+            case 'W':
+                cfg_io_write_delay = val;
+                break;
+            case 'R':
+                cfg_io_read_delay = val;
+                break;
+            case 'D':
+                cfg_io_data_delay = val;
+                break;
+            case 'A':
+                cfg_read_addr_delay = val;
+                break;
+            default:
+                break;
+            }
+        }
     }
     lfsresult = lfs_file_close(&lfs_volume, &lfs_file);
     if (lfsresult < 0)
@@ -237,4 +281,89 @@ bool cfg_set_vga(uint8_t disp)
 uint8_t cfg_get_vga(void)
 {
     return cfg_vga_display;
+}
+
+bool cfg_set_map_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 31){
+        cfg_map_delay = delay;
+        adj_map_delay(cfg_map_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_map_delay(void)
+{
+    return cfg_map_delay;
+}
+
+bool cfg_set_io_write_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 31){
+        cfg_io_write_delay = delay;
+        adj_io_write_delay(cfg_io_read_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_io_write_delay(void)
+{
+    return cfg_io_write_delay;
+}
+
+bool cfg_set_io_read_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 31){
+        cfg_io_read_delay = delay;
+        adj_io_read_delay(cfg_io_read_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_io_read_delay(void)
+{
+    return cfg_io_read_delay;
+}
+
+bool cfg_set_io_data_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 7){
+        cfg_io_data_delay = delay;
+        adj_io_data_delay(cfg_io_data_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_io_data_delay(void)
+{
+    return cfg_io_data_delay;
+}
+
+bool cfg_set_read_addr_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 7){
+        cfg_read_addr_delay = delay;
+        adj_read_addr_delay(cfg_read_addr_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_read_addr_delay(void)
+{
+    return cfg_read_addr_delay;
 }

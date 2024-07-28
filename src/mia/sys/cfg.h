@@ -30,5 +30,15 @@ bool cfg_set_codepage(uint32_t cp);
 uint16_t cfg_get_codepage(void);
 bool cfg_set_vga(uint8_t disp);
 uint8_t cfg_get_vga(void);
+bool cfg_set_map_delay(uint8_t delay);
+uint8_t cfg_get_map_delay(void);
+bool cfg_set_io_write_delay(uint8_t delay);
+uint8_t cfg_get_io_write_delay(void);
+bool cfg_set_io_read_delay(uint8_t delay);
+uint8_t cfg_get_io_read_delay(void);
+bool cfg_set_io_data_delay(uint8_t delay);
+uint8_t cfg_get_io_data_delay(void);
+bool cfg_set_read_addr_delay(uint8_t delay);
+uint8_t cfg_get_read_addr_delay(void);
 
 #endif /* _CFG_H_ */
