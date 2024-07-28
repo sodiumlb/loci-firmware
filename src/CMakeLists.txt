@@ -109,6 +109,7 @@ target_sources(loci-firmware PRIVATE
     mia/mon/rom.c
     mia/mon/set.c
     mia/mon/vip.c
+    mia/sys/adj.c
     mia/sys/cfg.c
     mia/sys/com.c
     mia/sys/cpu.c

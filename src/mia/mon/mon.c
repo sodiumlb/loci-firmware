@@ -13,6 +13,7 @@
 #include "mon/ram.h"
 #include "mon/rom.h"
 #include "mon/set.h"
+#include "sys/adj.h"
 #include "sys/com.h"
 #include "sys/mem.h"
 #include "sys/sys.h"
@@ -47,6 +48,11 @@ static struct
     {6, "upload", fil_mon_upload},
     {6, "unlink", fil_mon_unlink},
     {6, "binary", ram_mon_binary},
+    {4, "tmap", adj_mon_map},
+    {4, "tior", adj_mon_act_read},
+    {4, "tiow", adj_mon_act_write},
+    {4, "tiod", adj_mon_io_read},
+    {5, "taddr", adj_mon_read_addr},
 };
 static const size_t COMMANDS_COUNT = sizeof COMMANDS / sizeof *COMMANDS;
 

@@ -13,16 +13,18 @@
 start:
     wait 1 gpio 25  [15]
 .wrap_target
-    wait 0 gpio 25  [29] ;wait for phi2 negative edge + setup <- act read timing adjust 0-31
+    wait 0 gpio 25  [29] ;wait for phi2 negative edge + setup
+    nop             [0]  ;<- act read timing adjust 0-31
     mov osr pins
     out null 8           ;Spool out A[7:0]
     out x 8              ;Get page address A[15:8]
     jmp x!=y start
     jmp pin iswrite      ;Handle writes later
-    in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
+    in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush) read - data ignored in action loop
     jmp start            ;
 iswrite:                 ;Writes needs data to be stable (phi2 high)
-    wait 1 gpio 25  [20] ;Delay needed for stable data sampling <- act write timing adjust 0-31
+    wait 1 gpio 25  [20] ;Delay needed for stable data sampling 
+    nop             [0]  ;<- act write timing adjust 0-31
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
