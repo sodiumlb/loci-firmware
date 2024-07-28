@@ -305,8 +305,9 @@ static struct
     {2, "cp", set_code_page},
     {3, "vga", set_vga},
     {4, "tmap", set_map_delay},
-    {4, "tiow", set_io_read_delay},
-    {4, "tior", set_io_write_delay},
+    {4, "tior", set_io_read_delay},
+    {4, "tiow", set_io_write_delay},
+    {4, "tiod", set_io_data_delay},
     {4, "tadr", set_read_addr_delay},
 };
 static const size_t SETTERS_COUNT = sizeof SETTERS / sizeof *SETTERS;

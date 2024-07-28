@@ -305,7 +305,7 @@ bool cfg_set_io_write_delay(uint8_t delay)
     bool ok = false;
     if(delay <= 31){
         cfg_io_write_delay = delay;
-        adj_io_write_delay(cfg_io_read_delay);
+        adj_io_write_delay(cfg_io_write_delay);
         ok = true;
         cfg_save_with_boot_opt(NULL);
     }
