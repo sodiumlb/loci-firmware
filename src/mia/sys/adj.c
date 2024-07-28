@@ -1,6 +1,7 @@
 #include "main.h"
 #include "str.h"
 #include <stdio.h>
+#include "sys/cfg.h"
 #include "pico/stdlib.h"
 #include "mia.pio.h"
 
@@ -50,4 +51,13 @@ uint8_t adj_io_data_delay(uint8_t delay)
     printf("IO data tune %d\n",delay);
     MIA_READ_PIO->instr_mem[ADJ_IO_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
     return delay;
+}
+
+void adj_init(void){
+    //Set delays from cfg
+    adj_map_delay(cfg_get_map_delay());
+    adj_io_write_delay(cfg_get_io_write_delay());
+    adj_io_read_delay(cfg_get_io_read_delay());
+    adj_io_data_delay(cfg_get_io_data_delay());
+    adj_read_addr_delay(cfg_get_read_addr_delay());
 }
