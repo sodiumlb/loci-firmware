@@ -6,6 +6,7 @@
 
 #include "main.h"
 #include "oric/map.h"
+#include "sys/cfg.h"
 #include "sys/ext.h"
 #include "sys/mem.h"
 #include "sys/ssd.h"
@@ -16,10 +17,6 @@
 #include "hardware/structs/bus_ctrl.h"
 #include "littlefs/lfs_util.h"
 #include "mia.pio.h"
-
-//MUST be updated if PIO is changed
-#define MAP_TUNE_INSTR 5
-//TODO: Add assert that we're modding the right instruction
 
 void map_init(void)
 {
@@ -52,9 +49,10 @@ void map_trigger_irq(void)
 
 void map_api_tune(void)
 {
-    uint8_t delay = API_A & 0x1F;   //Range 0-31
-    printf("MAP tune %d\n",delay);
-    MIA_MAP_PIO->instr_mem[MAP_TUNE_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
+    uint8_t delay = API_A;          //Range 0-31 for setting, other return current
     api_sync_xstack();              //For safety only
-    return api_return_ax(delay);
+    if(cfg_set_map_delay(delay)){
+        printf("MAP tune %d\n",delay);
+    }        
+    return api_return_ax(cfg_get_map_delay());
 }
