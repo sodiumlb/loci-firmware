@@ -13,7 +13,7 @@
 start:
     wait 1 gpio 25  [15]
 .wrap_target
-    wait 0 gpio 25  [29] ;wait for phi2 negative edge + setup
+    wait 0 gpio 25  [29] ;wait for phi2 negative edge + setup <- act read timing adjust 0-31
     mov osr pins
     out null 8           ;Spool out A[7:0]
     out x 8              ;Get page address A[15:8]
@@ -22,7 +22,7 @@ start:
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
     jmp start            ;
 iswrite:                 ;Writes needs data to be stable (phi2 high)
-    wait 1 gpio 25  [20] ;Delay needed for stable data sampling
+    wait 1 gpio 25  [20] ;Delay needed for stable data sampling <- act write timing adjust 0-31
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
@@ -41,6 +41,7 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 .program mia_read_addr
 .side_set 1 opt
 isrom:
+    nop                  [0] ;<- read addr timing adjust 0-7
     in pins 14               ;input address (auto-push)   
 .wrap_target
     wait 1 gpio 25           ;wait for phi2 raising edge
@@ -62,6 +63,7 @@ start:
     irq wait 5               ;wait on CPU signaling 
     mov osr !null            ;prepare indirs
     wait 1 gpio 25       [7] ;wait for phi2 raising edge
+    nop                  [0] ;<-io read timing adjust 0-7
     out pindirs 8 side 0     ;enable data output
 .wrap
 
@@ -74,13 +76,8 @@ start:
 .wrap_target
 start:
     wait 0 gpio 25      [7]  ;wait for phi2 falling edge
-    jmp pin start       [7]  ;RnW inverted. Pass on Read
-;    mov osr pins             ;collect pins
-;    out y 8                  ;select page
-;    jmp x!=y notio           ;pass if y = 0x03
-;    irq set 4                ;signal io_read program (0x03xx hit)
-notio:
     wait 1 gpio 25      [0]  ;wait for phi2 raising edge
+    jmp pin start            ;RnW inverted. Pass on Read
     mov osr pins
     out null 6
     out y 2
@@ -88,7 +85,7 @@ notio:
     out null 9               ;spool out RnW,D[7:0]
     out y 3                  ;collect MAP,DIR,Phi2
     jmp x!=y start           ;if not MAP,DIR,Phi2 right then jump to start
-    mov osr !null       [7]  ;prepare pindirs = 0xff
+    mov osr !null       [6]  ;prepare pindirs = 0xff
     out pindirs 8 side 0     ;enable data output and DIR B->A. disabled in mia_io_read
 .wrap
 
@@ -103,7 +100,7 @@ start:
     mov osr pins             ;ca 70 cycles delay before setting MAP
     out y 3                  ;get A[15:13]
     jmp x!=y start     [20]  ;check matching address
-    nop                [15]
+    nop                [15]  ;<- MAP/RV1 timing adjust 0-31
 ismap:
     set pins 1         [30]  ;Delay equals MAP pulse width
     set pins 0  
