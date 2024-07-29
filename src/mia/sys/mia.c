@@ -829,11 +829,17 @@ static void mia_read_pio_init(void)
         true);
 }
 */
+static uint mia_read_addr_prg_offset;
+uint mia_get_read_addr_prg_offset(void){
+    return mia_read_addr_prg_offset;
+}
+
 static void mia_read_pio_init(void)
 { 
     // PIO for 6502 reads
     uint offset_d = pio_add_program(MIA_READ_PIO, &mia_read_data_program);
     uint offset_a = pio_add_program(MIA_READ_PIO, &mia_read_addr_program);
+    mia_read_addr_prg_offset = offset_a;
     pio_sm_config config_d = mia_read_data_program_get_default_config(offset_d);
     pio_sm_config config_a = mia_read_addr_program_get_default_config(offset_a);
     sm_config_set_out_pins(&config_d, D_PIN_BASE, 8);
@@ -903,10 +909,15 @@ static void mia_read_pio_init(void)
         true);
 }
 
+static uint mia_act_prg_offset;
+uint mia_get_act_prg_offset(void){
+    return mia_act_prg_offset;
+}
 static void mia_act_pio_init(void)
 {
     // PIO to supply action loop with events
     uint offset = pio_add_program(MIA_ACT_PIO, &mia_action_program);
+    mia_act_prg_offset = offset;
     pio_sm_config config = mia_action_program_get_default_config(offset);
     sm_config_set_in_pins(&config, A_PIN_BASE);
     sm_config_set_in_shift(&config, false, true, 25);
@@ -918,11 +929,17 @@ static void mia_act_pio_init(void)
     pio_sm_set_enabled(MIA_ACT_PIO, MIA_ACT_SM, true);
     multicore_launch_core1(act_loop);
 }
+
+static uint mia_io_read_prg_offset;
+uint mia_get_io_read_prg_offset(void){
+    return mia_io_read_prg_offset;
+}
 static void mia_io_read_pio_init(void)
 {
     
     // PIO to manage 6502 reads to Oric IO page 0x0300
     uint offset = pio_add_program(MIA_IO_READ_PIO, &mia_io_read_program);
+    mia_io_read_prg_offset = offset;
     pio_sm_config config = mia_io_read_program_get_default_config(offset);
     sm_config_set_in_pins(&config, A2_PIN);
     sm_config_set_in_shift(&config, false, true, 6);
@@ -1008,11 +1025,17 @@ static void mia_rom_read_pio_init(void)
 
 }
 
+static uint mia_map_prg_offset;
+uint mia_get_map_prg_offset(void){
+    return mia_map_prg_offset;
+}
+
 static void mia_map_pio_init(void)
 {
     
     // PIO to manage MAP signal timing
     uint offset = pio_add_program(MIA_MAP_PIO, &mia_map_program);
+    mia_map_prg_offset = offset;
     pio_sm_config config = mia_map_program_get_default_config(offset);
     sm_config_set_in_pins(&config, A13_PIN);
     sm_config_set_in_shift(&config, false, false, 0);
@@ -1119,12 +1142,15 @@ void mia_init(void)
     mia_boot_settings = 0;
 
     // the inits
+    // Same PIO order matters for timing tuning
     mia_map_pio_init(); //Must be first for MAP tuning
-    mia_read_pio_init();
+    mia_act_pio_init();
     //mia_write_pio_init();
+    
+    //Same PIO order matters timing tuning
+    mia_read_pio_init();    //read_data, read_addr
     mia_io_read_pio_init();
     mia_rom_read_pio_init();
-    mia_act_pio_init();
 }
 
 void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac)

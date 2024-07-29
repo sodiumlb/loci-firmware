@@ -13,6 +13,7 @@
 #include "mon/ram.h"
 #include "mon/rom.h"
 #include "mon/set.h"
+#include "sys/adj.h"
 #include "sys/com.h"
 #include "sys/mem.h"
 #include "sys/sys.h"

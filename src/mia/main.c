@@ -18,6 +18,7 @@
 #include "mon/mon.h"
 #include "mon/ram.h"
 #include "mon/rom.h"
+#include "sys/adj.h"
 #include "sys/com.h"
 #include "sys/cfg.h"
 #include "sys/cpu.h"
@@ -69,6 +70,7 @@ static void init(void)
 
     // Misc kernel modules, add yours here
     oem_init();
+    adj_init();
 
     //aud_init();
     kbd_init();
