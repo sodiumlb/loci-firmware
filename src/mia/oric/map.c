@@ -51,8 +51,6 @@ void map_api_tune(void)
 {
     uint8_t delay = API_A;          //Range 0-31 for setting, other return current
     api_sync_xstack();              //For safety only
-    if(cfg_set_map_delay(delay)){
-        printf("MAP tune %d\n",delay);
-    }        
+    cfg_set_map_delay(delay);        
     return api_return_ax(cfg_get_map_delay());
 }
