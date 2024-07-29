@@ -55,4 +55,9 @@ void mia_set_rom_ram_enable(bool device_rom, bool overlay_ram);
 //Call boot from Oric - typical from CUmini ROM
 void mia_api_boot(void);
 
+unsigned int mia_get_act_prg_offset(void);
+unsigned int mia_get_io_read_prg_offset(void);
+unsigned int mia_get_read_addr_prg_offset(void);
+unsigned int mia_get_map_prg_offset(void);
+
 #endif /* _MIA_H_ */
