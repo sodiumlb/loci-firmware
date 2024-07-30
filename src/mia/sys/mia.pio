@@ -43,7 +43,6 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 .program mia_read_addr
 .side_set 1 opt
 isrom:
-    nop                  [0] ;<- read addr timing adjust 0-7
     in pins 14               ;input address (auto-push)   
 .wrap_target
     wait 1 gpio 25           ;wait for phi2 raising edge
@@ -53,7 +52,10 @@ isrom:
     wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
     out pindirs 8 side 1 [7] ;disable data output
     mov isr x            [7] ; ROM page cortex base address
-    jmp pin isrom        [7] ; Test A[15] 0=IO 1=ROM
+    nop                  [7]
+    nop                  [0] ;<- read addr timing adjust 0-14 (0-7 + 0-7)
+    nop                  [0] ;
+    jmp pin isrom            ; Test A[15] 0=IO 1=ROM
 .wrap
 
 ;Waits for action loop in mia.c signaling read enable of data this cycle
