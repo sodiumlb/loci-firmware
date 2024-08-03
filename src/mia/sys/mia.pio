@@ -45,7 +45,7 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 isrom:
     in pins 14               ;input address (auto-push)   
 .wrap_target
-    wait 1 gpio 25           ;wait for phi2 raising edge
+    wait 1 gpio 25       [7] ;wait for phi2 raising edge
     pull noblock
     ;mov x osr
     out x 32                 ;same as <mov x osr> but clears osr for later use as zero
@@ -80,7 +80,7 @@ start:
 .wrap_target
 start:
     wait 0 gpio 25      [7]  ;wait for phi2 falling edge
-    wait 1 gpio 25      [0]  ;wait for phi2 raising edge
+    wait 1 gpio 25      [6]  ;wait for phi2 raising edge
     jmp pin start            ;RnW inverted. Pass on Read
     mov osr pins
     out null 6
@@ -89,7 +89,7 @@ start:
     out null 9               ;spool out RnW,D[7:0]
     out y 3                  ;collect MAP,DIR,Phi2
     jmp x!=y start           ;if not MAP,DIR,Phi2 right then jump to start
-    mov osr !null       [6]  ;prepare pindirs = 0xff
+    mov osr !null       [0]  ;prepare pindirs = 0xff
     out pindirs 8 side 0     ;enable data output and DIR B->A. disabled in mia_io_read
 .wrap
 
