@@ -24,7 +24,7 @@ void tap_init(void);
 void tap_task(void);
 void tap_stop();
 
-void tap_act();
+void tap_act(uint8_t data);
 
 bool tap_mount_lfs(lfs_file_t *lfs_file);
 bool tap_mount_fat(FIL* fat_file);

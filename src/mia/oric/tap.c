@@ -178,7 +178,8 @@ void tap_task(void){
     }
 }
 
-void tap_act(void){
+void tap_act(uint8_t data){
+    led_set(data & 0x40);
     //led_toggle();
     //tap_set_status(TAP_STAT_BUSY,true); //Holds Oric waiting and triggers tap_task() execution
 }

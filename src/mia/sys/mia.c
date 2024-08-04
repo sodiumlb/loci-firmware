@@ -492,12 +492,15 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                 uint32_t data = (rw_data_addr >> 16) & 0xFF;
                 switch (rw_data_addr & 0x0100FFFF)
                 {
+                case CASE_WRITE(0x300):
+                    tap_act(data);              //Motor sense
+                    break;
                 case CASE_READ(TAP_IO_STAT):
                 case CASE_WRITE(TAP_IO_CMD):
                 case CASE_READ(TAP_IO_DATA):
                 case CASE_WRITE(TAP_IO_DATA):
                     //printf(" %08x   \n", rw_data_addr);
-                    tap_act();
+                    //tap_act();
                     break;
                 //RW_DATA segment at xram 0x4000 aka oric_bank1
                 case CASE_WRITE(0x31A): //ADDR
@@ -1080,7 +1083,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //DonÂ´t Enable levelshifters yet
+    //Don�t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 
