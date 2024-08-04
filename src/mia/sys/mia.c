@@ -215,8 +215,20 @@ bool mia_boot_active(void)
     return mia_state != MIA_IDLE;
 }
 
+/* Basic 1.1 CLOAD read byte patch
+A9 00                LDA #$00
+8D B1 02             STA $02B1
+A9 01                LDA #$01
+8D 15 03             STA $0315
+AD 15 03   WAIT:     LDA $0315
+D0 FB                BNE WAIT
+AD 17 03             LDA $0317
+85 2F                STA $2F
+60                   RTS
+*/
 #define CLOAD_PATCH_11_ADDR (0xE6C9)
 const uint8_t __in_flash() mia_cload_patch_11[] = {
+    0xA9, 0x00, 0x8D, 0xB1, 0x02,
     0xA9, 0x01, 0x8D, 0x15, 0x03, 0xAD, 0x15, 0x03,
     0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x60
 };
@@ -1068,7 +1080,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //Don�t Enable levelshifters yet
+    //DonÂ´t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 

@@ -109,7 +109,12 @@ bool tap_read_byte(void){
                 //TODO error
         }
     }
-    return fs_ret;
+    //Return zero when nothing is read 
+    if(!fs_ret){
+        IOREGS(TAP_IO_DATA) = 0x00;
+    }
+
+    return true;
 }
 
 void tap_init(void){
@@ -134,10 +139,9 @@ void tap_task(void){
             break;
         case TAP_READ:
             if(IOREGS(TAP_IO_STAT) & TAP_STAT_BUSY){
-                if(tap_read_byte()){
-                    tap_set_status(TAP_STAT_BUSY,false);
-                    tap_state = TAP_CLEANUP;
-                }
+                tap_read_byte();
+                tap_set_status(TAP_STAT_BUSY,false);
+                tap_state = TAP_CLEANUP;
             }
             break;
         case TAP_WRITE:
