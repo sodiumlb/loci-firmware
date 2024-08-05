@@ -216,8 +216,6 @@ bool mia_boot_active(void)
 }
 
 /* Basic 1.1 CLOAD read byte patch
-A9 00                LDA #$00
-8D B1 02             STA $02B1
 A9 01                LDA #$01
 8D 15 03             STA $0315
 AD 15 03   WAIT:     LDA $0315
@@ -228,9 +226,17 @@ AD 17 03             LDA $0317
 */
 #define CLOAD_PATCH_11_ADDR (0xE6C9)
 const uint8_t __in_flash() mia_cload_patch_11[] = {
-    0xA9, 0x00, 0x8D, 0xB1, 0x02,
     0xA9, 0x01, 0x8D, 0x15, 0x03, 0xAD, 0x15, 0x03,
     0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x60
+};
+
+/* Basic 1.1 CLOAD synch patch
+A2 00                LDX #$00
+EA                   NOP
+*/
+#define SYNCH_PATCH_11_ADDR (0xE4AC)
+const uint8_t __in_flash() mia_synch_patch_11[] = {
+0xA2, 0x00, 0xEA
 };
 
 void mia_task(void)
@@ -275,13 +281,13 @@ void mia_task(void)
                 //Patch for TAP loading CLOAD
                 if(mia_boot_settings & MIA_BOOTSET_TAP){
                     if(mia_boot_settings & MIA_BOOTSET_B11){
-                        xram[0xE4AC+0] = 0xEA;  //NOP
-                        xram[0xE4AC+1] = 0xEA;  //NOP
-                        xram[0xE4AC+2] = 0xEA;  //NOP
+                        for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
+                            xram[SYNCH_PATCH_11_ADDR+i] = mia_synch_patch_11[i];
+                        }
                         for(uint16_t i=0; i<sizeof(mia_cload_patch_11); i++){
                             xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch_11[i];
                         }
-                    }else{
+                     }else{
                         printf("CLOAD patch for BASIC10 not implemented\n");
                     }
                 }
@@ -704,7 +710,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                 }
     
                 }
-            
+            /*
                 if((rw_data_addr & 0x0000FFF0) == 0x00000310){
                     if(rw_data_addr >> 24){
                         ssd_action_word = rw_data_addr;
@@ -715,6 +721,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         ssd_action_is_wr = false;
                     }
                 }
+            */
             }
         }
             
