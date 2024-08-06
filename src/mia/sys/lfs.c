@@ -22,12 +22,12 @@
 
 static_assert(!(LFS_DISK_BLOCKS % 8));
 
-static int lfs_read(const struct lfs_config *c, lfs_block_t block,
+static int __not_in_flash() lfs_read(const struct lfs_config *c, lfs_block_t block,
                     lfs_off_t off, void *buffer, lfs_size_t size);
-static int lfs_prog(const struct lfs_config *c, lfs_block_t block,
+static int __not_in_flash() lfs_prog(const struct lfs_config *c, lfs_block_t block,
                     lfs_off_t off, const void *buffer, lfs_size_t size);
-static int lfs_erase(const struct lfs_config *c, lfs_block_t block);
-static int lfs_sync(const struct lfs_config *c);
+static int __not_in_flash() lfs_erase(const struct lfs_config *c, lfs_block_t block);
+static int __not_in_flash() lfs_sync(const struct lfs_config *c);
 
 #define LFS_DISK_SIZE (LFS_DISK_BLOCKS * FLASH_SECTOR_SIZE)
 #define LFS_LOOKAHEAD_SIZE (LFS_DISK_BLOCKS / 8)

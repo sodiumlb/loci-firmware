@@ -49,8 +49,8 @@ create_resources(${CMAKE_CURRENT_LIST_DIR}/roms ${CMAKE_BINARY_DIR}/loci_roms.h)
 add_executable(loci-firmware)
 pico_add_extra_outputs(loci-firmware)
 pico_set_program_name(loci-firmware "LOCI firmware")
-pico_set_binary_type(loci-firmware copy_to_ram)
-pico_set_linker_script(loci-firmware ${CMAKE_CURRENT_LIST_DIR}/memmap_xram_mia.ld)
+pico_set_binary_type(loci-firmware default)
+pico_set_linker_script(loci-firmware ${CMAKE_CURRENT_LIST_DIR}/memmap_xram_mia_xip.ld)
 
 target_include_directories(loci-firmware PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}

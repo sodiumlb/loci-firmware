@@ -802,13 +802,13 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
     return dsk_next_track;
 }
 
-void dsk_act(uint8_t raw_cmd){
+void __not_in_flash() dsk_act(uint8_t raw_cmd){
     sio_hw->fifo_wr = 0x80000000 | (dsk_reg_ctrl << 8) | raw_cmd;
     dsk_set_status(DSK_STAT_BUSY,true);
     IOREGS(DSK_IO_CMD) = dsk_reg_status;
 }
 
-void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work here
+void __not_in_flash() dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work here
     //dsk_reg_drq = 0x80; //active low
     //dsk_set_status(DSK_STAT_DRQ,false);
     //IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
@@ -824,7 +824,7 @@ void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work her
 
 //Microdisc control register
 //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
-void dsk_set_ctrl(uint8_t raw_reg){
+void __not_in_flash() dsk_set_ctrl(uint8_t raw_reg){
     if((dsk_reg_ctrl ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
         sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
     dsk_reg_ctrl = raw_reg;             

@@ -470,7 +470,7 @@ int mia_read_dma_channel;
 #define MIA_RW1 IOREGS(0x03A8)
 #define MIA_STEP1 *(int8_t *)&IOREGS(0x03A9)
 #define MIA_ADDR1 IOREGSW(0x03AA)
-static __attribute__((optimize("O1"))) void act_loop(void)
+static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
 {
     printf("act_loop started\n");
     
