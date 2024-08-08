@@ -60,4 +60,6 @@ unsigned int mia_get_io_read_prg_offset(void);
 unsigned int mia_get_read_addr_prg_offset(void);
 unsigned int mia_get_map_prg_offset(void);
 
+extern uint32_t mia_io_errors;
+
 #endif /* _MIA_H_ */
