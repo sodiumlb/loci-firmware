@@ -11,7 +11,7 @@
 .program mia_action
 
 start:
-    wait 1 gpio 25  [15]
+    wait 1 gpio 25  [31]
 .wrap_target
     wait 0 gpio 25  [15] ;wait for phi2 negative edge + setup
     nop             [0]  ;<- act read timing adjust 0-31
@@ -25,7 +25,7 @@ start:
 iswrite:                 ;Writes needs data to be stable (phi2 high)
     wait 1 gpio 25  [20] ;Delay needed for stable data sampling 
     nop             [0]  ;<- act write timing adjust 0-31
-    in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush)
+    in pins 25      [15] ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
 ; Async ROM and IO data read emulation
@@ -43,12 +43,12 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 .program mia_read_addr
 .side_set 1 opt
 isrom:
-    in pins 14               ;input address (auto-push)   
+    in pins 14           [7] ;input address (auto-push)   
 .wrap_target
     wait 1 gpio 25       [7] ;wait for phi2 raising edge
-    pull noblock
+    pull noblock         [7]
     ;mov x osr
-    out x 32                 ;same as <mov x osr> but clears osr for later use as zero
+    out x 32             [7] ;same as <mov x osr> but clears osr for later use as zero
     wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
     out pindirs 8 side 1 [7] ;disable data output
     mov isr x            [7] ; ROM page cortex base address
@@ -97,9 +97,9 @@ start:
 ; Active for A[15:13]=X
 .program mia_map
 
-.wrap_target
 start:
-    wait 1 gpio 25     [10]
+    wait 1 gpio 25     [31]
+.wrap_target
     wait 0 gpio 25     [31]  ;wait for phi2 falling edge + A setup-time
     mov osr pins             ;ca 70 cycles delay before setting MAP
     out y 3                  ;get A[15:13]
