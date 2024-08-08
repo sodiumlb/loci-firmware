@@ -261,7 +261,19 @@ bool main_api(uint8_t operation)
         mia_api_boot();
         break;
     case 0xA1:
-        map_api_tune();
+        map_api_tune_tmap();
+        break;
+    case 0xA2:
+        map_api_tune_tior();
+        break;
+    case 0xA3:
+        map_api_tune_tiow();
+        break;
+    case 0xA4:
+        map_api_tune_tiod();
+        break;
+    case 0xA5:
+        map_api_tune_tadr();
         break;
     default:
         return false;
