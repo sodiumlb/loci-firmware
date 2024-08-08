@@ -54,7 +54,7 @@ static volatile bool irq_enabled;
 
 static uint8_t mia_boot_settings;
 
-uint32_t mia_io_errors;
+static volatile uint32_t mia_io_errors;
 
 /*
 void mia_trigger_irq(void)
