@@ -171,7 +171,7 @@ void dir_api_readdir(void){
         if(dir_dev == 0){
             strcpy((char*)dirent.d_name, "0: Internal storage [15MB]");
         }else{
-            while(!tuh_mounted(dir_dev))
+            while(!tuh_mounted(dir_dev) && dir_dev < CFG_TUH_DEVICE_MAX)
                 dir_dev++;
             if(dir_dev >= CFG_TUH_DEVICE_MAX)
                 return api_return_errno(API_ENODEV);

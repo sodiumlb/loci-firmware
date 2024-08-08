@@ -15,6 +15,6 @@
 	update = merge
 [submodule "src/tinyusb"]
 	path = src/tinyusb
-	url = https://github.com/hathach/tinyusb.git
-	branch = master
+	url = https://github.com/sodiumlb/tinyusb.git
+	branch = loci
 	update = merge

@@ -37,6 +37,7 @@ tap_drive_t tap_drive = {0};
 
 #define TAP_CMD_PLAY        (0x01)
 #define TAP_CMD_REC         (0x02)
+#define TAP_CMD_REW         (0x03)
 
 //volatile uint8_t *tap_reg_stat = &IOREGS(TAP_IO_STAT);
 
@@ -80,6 +81,20 @@ void tap_umount(void){
     tap_drive.type = EMPTY;
 }
 
+void tap_rewind(void){
+    switch(tap_drive.type){
+        case LFS:
+            lfs_file_rewind(&lfs_volume, tap_drive.lfs_file);
+            break;
+        case FAT:
+            f_rewind(tap_drive.fat_file);
+            break;
+        default:
+            break;
+    }
+    tap_drive.counter = 0;
+}
+
 enum TAP_STATE { TAP_IDLE, TAP_READ, TAP_WRITE, TAP_CLEANUP } tap_state = TAP_IDLE;
 
 bool tap_read_byte(void){
@@ -109,7 +124,12 @@ bool tap_read_byte(void){
                 //TODO error
         }
     }
-    return fs_ret;
+    //Return zero when nothing is read 
+    if(!fs_ret){
+        IOREGS(TAP_IO_DATA) = 0x00;
+    }
+
+    return true;
 }
 
 void tap_init(void){
@@ -122,22 +142,29 @@ void tap_init(void){
 void tap_task(void){
     switch(tap_state){
         case TAP_IDLE:
-            if(IOREGS(TAP_IO_CMD) == TAP_CMD_PLAY){
-                tap_state = TAP_READ;
-                tap_set_status(TAP_STAT_BUSY,true);
-            }
-            if(IOREGS(TAP_IO_CMD) == TAP_CMD_REC){
+            switch(IOREGS(TAP_IO_CMD)){
+                case TAP_CMD_PLAY:
+                    tap_state = TAP_READ;
+                    tap_set_status(TAP_STAT_BUSY,true);
+                    break;
+                case TAP_CMD_REC:
                 //TODO setup initial write file
-                tap_set_status(TAP_STAT_BUSY,true);
-                tap_state = TAP_WRITE;
+                    tap_set_status(TAP_STAT_BUSY,true);
+                    tap_state = TAP_WRITE;
+                    break;
+                case TAP_CMD_REW:
+                    tap_rewind();
+                    tap_state = TAP_CLEANUP;
+                   break;
+                 default:
+                    break;
             }
             break;
         case TAP_READ:
             if(IOREGS(TAP_IO_STAT) & TAP_STAT_BUSY){
-                if(tap_read_byte()){
-                    tap_set_status(TAP_STAT_BUSY,false);
-                    tap_state = TAP_CLEANUP;
-                }
+                tap_read_byte();
+                tap_set_status(TAP_STAT_BUSY,false);
+                tap_state = TAP_CLEANUP;
             }
             break;
         case TAP_WRITE:
@@ -151,7 +178,8 @@ void tap_task(void){
     }
 }
 
-void tap_act(void){
+void tap_act(uint8_t data){
+    led_set(data & 0x40);
     //led_toggle();
     //tap_set_status(TAP_STAT_BUSY,true); //Holds Oric waiting and triggers tap_task() execution
 }

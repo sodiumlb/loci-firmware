@@ -354,7 +354,7 @@ uint8_t cfg_get_io_data_delay(void)
 bool cfg_set_read_addr_delay(uint8_t delay)
 {
     bool ok = false;
-    if(delay <= 7){
+    if(delay <= 14){
         cfg_read_addr_delay = delay;
         adj_read_addr_delay(cfg_read_addr_delay);
         ok = true;
