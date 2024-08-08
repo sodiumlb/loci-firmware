@@ -47,10 +47,38 @@ void map_trigger_irq(void)
     
 }
 
-void map_api_tune(void)
+void map_api_tune_tmap(void)
 {
     uint8_t delay = API_A;          //Range 0-31 for setting, other return current
     api_sync_xstack();              //For safety only
     cfg_set_map_delay(delay);        
     return api_return_ax(cfg_get_map_delay());
+}
+void map_api_tune_tior(void)
+{
+    uint8_t delay = API_A;          //Range 0-31 for setting, other return current
+    api_sync_xstack();              //For safety only
+    cfg_set_io_read_delay(delay);        
+    return api_return_ax(cfg_get_io_read_delay());
+}
+void map_api_tune_tiow(void)
+{
+    uint8_t delay = API_A;          //Range 0-31 for setting, other return current
+    api_sync_xstack();              //For safety only
+    cfg_set_io_write_delay(delay);        
+    return api_return_ax(cfg_get_io_write_delay());
+}
+void map_api_tune_tiod(void)
+{
+    uint8_t delay = API_A;          //Range 0-7 for setting, other return current
+    api_sync_xstack();              //For safety only
+    cfg_set_io_data_delay(delay);        
+    return api_return_ax(cfg_get_io_data_delay());
+}
+void map_api_tune_tadr(void)
+{
+    uint8_t delay = API_A;          //Range 0-7 for setting, other return current
+    api_sync_xstack();              //For safety only
+    cfg_set_read_addr_delay(delay);        
+    return api_return_ax(cfg_get_read_addr_delay());
 }
