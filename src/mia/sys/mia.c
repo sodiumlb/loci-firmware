@@ -491,6 +491,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
         if (!(MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM))))
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
+            (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
         
             //Track errors and stop processing if address is wrong (0x03xx)
             if((rw_data_addr & 0x0000FF00) != 0x00000300){
@@ -498,7 +499,6 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                 continue;
             }
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
-                (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                 if((mia_iopage_enable_map >> ((rw_data_addr & 0x000000FC) >> 2)) & 0x1ULL)
                     MIA_IO_READ_PIO->irq = 1u << 5;
             }else{  //Write - Saves having dedicated write PIO program
