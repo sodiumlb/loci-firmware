@@ -54,6 +54,8 @@ static volatile bool irq_enabled;
 
 static uint8_t mia_boot_settings;
 
+uint32_t mia_io_errors;
+
 /*
 void mia_trigger_irq(void)
 {
@@ -102,7 +104,7 @@ void mia_run(void)
 {
 
     ext_put(EXT_ROMDIS,true);
-    printf("**mia_run()**");
+    //printf("**mia_run()**");
     //ext_set_dir(EXT_ROMDIS,true);
     //mia_set_rom_read_enable(true);
     //mia_set_rom_ram_enable(true,false);
@@ -110,6 +112,8 @@ void mia_run(void)
     //ext_put(EXT_OE,true);
     //ext_put(EXT_nRESET,true);
   
+    mia_io_errors = 0;
+
     mia_set_watch_address(0xFFE2);
     if (action_state == action_state_idle)
         return;
@@ -223,6 +227,7 @@ const uint8_t __in_flash() mia_cload_patch_11[] = {
 
 void mia_task(void)
 {
+    static uint32_t prev_io_errors = 0;
     // check on watchdog
     if (mia_active())
     {
@@ -283,6 +288,12 @@ void mia_task(void)
             break;
         case MIA_IDLE:
             break;
+    }
+    if(mia_io_errors != prev_io_errors){
+        if(mia_io_errors > 0){
+            printf("!IO error %ld\n", mia_io_errors);
+        }
+        prev_io_errors = mia_io_errors;
     }
 }
 
@@ -463,14 +474,15 @@ static __attribute__((optimize("O1"))) void act_loop(void)
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
         
-            //led_set(false);
-            //        ssd_got_action_word = true;
+            //Track errors and stop processing if address is wrong (0x03xx)
+            if((rw_data_addr & 0x0000FF00) != 0x00000300){
+                mia_io_errors++;
+                continue;
+            }
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
-                //MIA_READ_PIO->txf[MIA_READ_DATA_SM] = oric_bank0[rw_data_addr & 0x0000FFFF];
                 (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                 if((mia_iopage_enable_map >> ((rw_data_addr & 0x000000FC) >> 2)) & 0x1ULL)
                     MIA_IO_READ_PIO->irq = 1u << 5;
-                //dma_channel_set_read_addr(mia_read_dma_channel,&oric_bank0[rw_data_addr & 0xFFFF],true);
             }else{  //Write - Saves having dedicated write PIO program
                 IOREGS(rw_data_addr & 0xFF) = (rw_data_addr >> 16) & 0xFF;
             }
