@@ -104,6 +104,7 @@ void main_task(void)
     std_task();
     led_task();
     pwr_task();
+    adj_task();
 }
 
 // Tasks that call FatFs should be here instead of main_task().
@@ -275,6 +276,8 @@ bool main_api(uint8_t operation)
     case 0xA5:
         map_api_tune_tadr();
         break;
+    case 0xA6:
+        adj_scan();
     default:
         return false;
     }
