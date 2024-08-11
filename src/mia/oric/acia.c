@@ -55,6 +55,7 @@ volatile uint8_t acia_cmd_data;
 volatile uint8_t acia_ctrl_data;
 volatile bool acia_cmd_todo;
 volatile bool acia_ctrl_todo;
+volatile bool acia_stat_checked;
 
 static bool acia_tx_irq_enable;
 static bool acia_rx_irq_enable;
@@ -74,7 +75,6 @@ void acia_do_ctrl(uint8_t ctrl);
 static uint8_t acia_rx_buffer[ACIA_RX_BUFFER_SIZE];
 uint32_t acia_rx_buffer_len;
 uint32_t acia_rx_buffer_pos;
-
 
 void acia_set_status(uint8_t bit, bool val){
     if(val){
@@ -105,37 +105,69 @@ void acia_init(void){
     acia_rx_buffer_pos = 0;
 }
 void acia_task(void){
-    if(acia_dev < 0)
-        return;
-
-    if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
-       if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
-            tuh_cdc_write_flush(acia_dev);
-            //printf("[%c]",acia_tx_data);
-            acia_set_status(ACIA_STAT_TX_EMPTY,true);
-            if(acia_tx_echo_enable){
-                IOREGS(ACIA_IO_DATA) = acia_tx_data;
-                acia_set_status(ACIA_STAT_RX_FULL, true);
-            }
-            if(acia_tx_irq_enable){
+    if(acia_dev < 0){
+        for(uint8_t i=0; i < CFG_TUH_CDC; i++){
+        //Only hooking up to CDC devices with AT commands aka modems
+        //TODO make configurable what CDC device to "mount"
+            if(tuh_cdc_mounted(i) && cdc_is_modem(i)){
+                acia_dev = i;
+                printf("ACIA on %d\n", acia_dev);
+                acia_set_status(ACIA_STAT_NOT_DSR,false);
+                acia_set_status(ACIA_STAT_NOT_DCD,false);
                 acia_set_status(ACIA_STAT_IRQ, true);
                 ext_pulse(EXT_IRQ);
+                break;
             }
-        }else{printf("!");}
+        }
+        return;
     }
-    if(tuh_cdc_read_available(acia_dev) && !acia_get_status(ACIA_STAT_RX_FULL)){
-        if(acia_rx_buffer_len == 0 || acia_rx_buffer_pos >= acia_rx_buffer_len){
-            acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, ACIA_RX_BUFFER_SIZE);
+
+    if(!tuh_cdc_mounted(acia_dev)){
+        printf("ACIA lost\n");
+        acia_dev = -1;
+        acia_rx_buffer_len = 0;
+        acia_set_status(ACIA_STAT_NOT_DSR,true);
+        acia_set_status(ACIA_STAT_NOT_DCD,true);
+        acia_set_status(ACIA_STAT_IRQ, true);
+        ext_pulse(EXT_IRQ);
+        return;
+    }
+
+    if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
+        if(tuh_cdc_write_available(acia_dev)){
+            if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
+                tuh_cdc_write_flush(acia_dev);
+                //printf("[%02x]",acia_tx_data);
+                acia_set_status(ACIA_STAT_TX_EMPTY,true);
+                if(acia_tx_echo_enable){
+                    IOREGS(ACIA_IO_DATA) = acia_tx_data;
+                    acia_set_status(ACIA_STAT_RX_FULL, true);
+                }
+                if(acia_tx_irq_enable){
+                    acia_set_status(ACIA_STAT_IRQ, true);
+                    ext_pulse(EXT_IRQ);
+                }
+            }else{printf("!");}
+        }
+    }
+    uint32_t acia_rx_available = tuh_cdc_read_available(acia_dev);
+    if((acia_rx_available > 0) && !acia_get_status(ACIA_STAT_RX_FULL)){
+        /*
+        if((acia_rx_buffer_len == 0) || (acia_rx_buffer_pos >= acia_rx_buffer_len)){
+            acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, (acia_rx_available > ACIA_RX_BUFFER_SIZE ? ACIA_RX_BUFFER_SIZE : acia_rx_available));
             acia_rx_buffer_pos = 0;
         }
-        if(acia_rx_buffer_len > 0 && acia_rx_buffer_pos < acia_rx_buffer_len){
+        if((acia_rx_buffer_len > 0) && (acia_rx_buffer_pos < acia_rx_buffer_len) && acia_stat_checked){
             acia_rx_data = acia_rx_buffer[acia_rx_buffer_pos++];
+        */
+        if(tuh_cdc_read(acia_dev, &acia_rx_data, 1)){
             IOREGS(ACIA_IO_DATA) = acia_rx_data;
             acia_set_status(ACIA_STAT_RX_FULL, true);
             if(acia_rx_irq_enable){
                 acia_set_status(ACIA_STAT_IRQ, true);
                 ext_pulse(EXT_IRQ);
             }
+            acia_stat_checked = false;
         }
     }
     if(acia_cmd_todo){
@@ -151,15 +183,6 @@ void acia_task(void){
 }
 
 void acia_run(){
-    printf("acia_run()\n");
-   for(uint8_t i=0; i < CFG_TUH_CDC; i++){
-        //Only hooking up to CDC devices with AT commands aka modems
-        //TODO make configurable what CDC device to "mount"
-        if(tuh_cdc_mounted(i) && cdc_is_modem(i)){
-            acia_dev = i;
-            printf("ACIA on %d\n", acia_dev);
-        }
-    }
 }
 
 
@@ -287,7 +310,7 @@ void acia_do_ctrl(uint8_t ctrl){
 
 void __not_in_flash() acia_reset(bool hw_reset){
     if(hw_reset){
-        acia_status_reg = ACIA_STAT_TX_EMPTY;
+        acia_status_reg = ACIA_STAT_TX_EMPTY | ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD;
         IOREGS(ACIA_IO_DATA) = 0;
         IOREGS(ACIA_IO_STAT) = acia_status_reg;
         IOREGS(ACIA_IO_CMD)  = ACIA_CMD_IRQ;
@@ -308,6 +331,7 @@ void __not_in_flash() acia_read(void){
 void __not_in_flash() acia_clr_irq(void){
     acia_status_reg &= ~ACIA_STAT_IRQ;
     IOREGS(ACIA_IO_STAT) = acia_status_reg;
+    acia_stat_checked = true;
 }
 
 void __not_in_flash() acia_write(uint8_t data){
