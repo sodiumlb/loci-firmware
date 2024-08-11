@@ -70,6 +70,11 @@ static cdc_control_line_state_t acia_line_state_rts;
 void acia_do_cmd(uint8_t cmd);
 void acia_do_ctrl(uint8_t ctrl);
 
+#define ACIA_RX_BUFFER_SIZE 64
+static uint8_t acia_rx_buffer[ACIA_RX_BUFFER_SIZE];
+uint32_t acia_rx_buffer_len;
+uint32_t acia_rx_buffer_pos;
+
 
 void acia_set_status(uint8_t bit, bool val){
     if(val){
@@ -96,13 +101,15 @@ static inline bool acia_calc_irq(void){
 void acia_init(void){
     acia_reset(true);
     acia_dev = -1;
+    acia_rx_buffer_len = 0;
+    acia_rx_buffer_pos = 0;
 }
 void acia_task(void){
     if(acia_dev < 0)
         return;
 
     if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
-        if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
+       if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
             tuh_cdc_write_flush(acia_dev);
             //printf("[%c]",acia_tx_data);
             acia_set_status(ACIA_STAT_TX_EMPTY,true);
@@ -117,13 +124,18 @@ void acia_task(void){
         }else{printf("!");}
     }
     if(tuh_cdc_read_available(acia_dev) && !acia_get_status(ACIA_STAT_RX_FULL)){
-        tuh_cdc_read(acia_dev, (void*)&acia_rx_data, 1);
-        //printf("%c",acia_rx_data);
-        IOREGS(ACIA_IO_DATA) = acia_rx_data;
-        acia_set_status(ACIA_STAT_RX_FULL, true);
-        if(acia_rx_irq_enable){
-            acia_set_status(ACIA_STAT_IRQ, true);
-            ext_pulse(EXT_IRQ);
+        if(acia_rx_buffer_len == 0 || acia_rx_buffer_pos >= acia_rx_buffer_len){
+            acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, ACIA_RX_BUFFER_SIZE);
+            acia_rx_buffer_pos = 0;
+        }
+        if(acia_rx_buffer_len > 0 && acia_rx_buffer_pos < acia_rx_buffer_len){
+            acia_rx_data = acia_rx_buffer[acia_rx_buffer_pos++];
+            IOREGS(ACIA_IO_DATA) = acia_rx_data;
+            acia_set_status(ACIA_STAT_RX_FULL, true);
+            if(acia_rx_irq_enable){
+                acia_set_status(ACIA_STAT_IRQ, true);
+                ext_pulse(EXT_IRQ);
+            }
         }
     }
     if(acia_cmd_todo){
@@ -154,6 +166,7 @@ void acia_run(){
 void acia_stop(){
     printf("acia_stop()\n");
     acia_dev = -1;
+    acia_rx_buffer_len = 0;
     acia_reset(true);
 }
 
