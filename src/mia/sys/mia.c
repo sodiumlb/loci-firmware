@@ -22,6 +22,7 @@
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
 #include "littlefs/lfs_util.h"
+#include "oric/acia.h"
 #include "oric/dsk.h"
 #include "oric/tap.h"
 
@@ -530,6 +531,25 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     break;
                 case CASE_WRITE(0x031B): //RW_DATA
                     oric_bank1[IOREGS(0x31A)] = data;
+                    break;
+                //ACIA Device Registers 0x380-0x383
+                case CASE_READ(ACIA_IO_DATA):
+                    acia_read();
+                    break;
+                case CASE_WRITE(ACIA_IO_DATA):
+                    acia_write(data);
+                    break;
+                case CASE_READ(ACIA_IO_STAT):
+                    acia_clr_irq();
+                    break;
+                case CASE_WRITE(ACIA_IO_STAT):
+                    acia_reset(false);
+                    break;
+                case CASE_WRITE(ACIA_IO_CMD):
+                    acia_cmd(data);
+                    break;
+                case CASE_WRITE(ACIA_IO_CTRL):
+                    acia_ctrl(data);
                     break;
                 //Microdisc Device Register
                 case CASE_READ(DSK_IO_CMD):
@@ -1164,11 +1184,15 @@ void mia_init(void)
     }
     */
    mia_iopage_enable_map = 0x00;
-    //Enable response on IO registers 0x310-0x31B
+    //Enable response on IO registers 0x310-0x31B (DSK/TAP)
     for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
         mia_iopage_enable_map |= (0x1ULL << i);
     }
-    //Enable response on IO registers 0x3A0-0x3BF
+    //Enable response on IO registers 0x380-0x383 (ACIA)
+    for(int i=(0x80 >> 2); i<=(0x83 >> 2); i++){
+        mia_iopage_enable_map |= (0x1ULL << i);
+    }
+    //Enable response on IO registers 0x3A0-0x3BF (LOCI)
     for(int i=(0xA0 >> 2); i<=(0xBF >> 2); i++){
         mia_iopage_enable_map |= (0x1ULL << i);
     }
