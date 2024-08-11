@@ -35,6 +35,7 @@
 #include "usb/mou.h"
 #include "usb/cdc.h"
 #include "usb/msc.h"
+#include "oric/acia.h"
 #include "oric/map.h"
 #include "oric/dsk.h"
 #include "oric/tap.h"
@@ -61,6 +62,7 @@ static void init(void)
     dsk_init();
     tap_init();
     com_init();
+    acia_init();
     // Print startup message
     sys_init();
 
@@ -105,6 +107,7 @@ void main_task(void)
     led_task();
     pwr_task();
     adj_task();
+    acia_task();
 }
 
 // Tasks that call FatFs should be here instead of main_task().
@@ -129,6 +132,7 @@ static void run(void)
     //vga_run();
     api_run();
     //map_run();
+    acia_run();
     mia_run(); // Must be immediately before cpu
     cpu_run(); // Must be last
 }
@@ -143,6 +147,7 @@ static void stop(void)
     std_stop();
     kbd_stop();
     mou_stop();
+    acia_stop();
 }
 
 // Event for CTRL-ALT-DEL and UART breaks.
@@ -278,6 +283,7 @@ bool main_api(uint8_t operation)
         break;
     case 0xA6:
         adj_scan();
+        break;
     default:
         return false;
     }

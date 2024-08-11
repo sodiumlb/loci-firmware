@@ -15,4 +15,7 @@
 void cdc_init(void);
 void cdc_task(void);
 
+bool cdc_is_modem(uint8_t idx);
+
+
 #endif /* _CDC_H_ */
