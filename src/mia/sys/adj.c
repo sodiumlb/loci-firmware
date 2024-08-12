@@ -41,14 +41,9 @@ uint8_t adj_io_write_delay(uint8_t delay)
 
 uint8_t adj_read_addr_delay(uint8_t delay)
 {
-    uint8_t delay2=0;
-    if(delay>14)
-        delay = 14;
-    if(delay>7)
-        delay2 = delay - 7;
+    delay &= 0x1f;
     printf("Addr tune %d\n",delay);
-    MIA_READ_PIO->instr_mem[mia_get_read_addr_prg_offset() + ADJ_ADDR_INSTR + 0] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay & 0x07));
-    MIA_READ_PIO->instr_mem[mia_get_read_addr_prg_offset() + ADJ_ADDR_INSTR + 1] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay2));
+    MIA_READ_PIO->instr_mem[mia_get_read_addr_prg_offset() + ADJ_ADDR_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
     return delay;
 }
 

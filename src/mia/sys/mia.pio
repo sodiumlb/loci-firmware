@@ -41,7 +41,6 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 .wrap
 
 .program mia_read_addr
-.side_set 1 opt
 isrom:
     in pins 14           [7] ;input address (auto-push)   
 .wrap_target
@@ -50,17 +49,15 @@ isrom:
     ;mov x osr
     out x 32             [7] ;same as <mov x osr> but clears osr for later use as zero
     wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
-    out pindirs 8 side 1 [7] ;disable data output
-    mov isr x            [7] ; ROM page cortex base address
-    nop                  [7]
+    out pindirs 8            ;disable data output
+    set pins 1           [6]
+    mov isr x           [14] ; ROM page cortex base address
     nop                  [0] ;<- read addr timing adjust 0-14 (0-7 + 0-7)
-    nop                  [0] ;
     jmp pin isrom            ; Test A[15] 0=IO 1=ROM
 .wrap
 
 ;Waits for action loop in mia.c signaling read enable of data this cycle
 .program mia_io_read
-.side_set 1 opt
 
 .wrap_target
 start:
@@ -68,14 +65,14 @@ start:
     mov osr !null            ;prepare indirs
     wait 1 gpio 25       [7] ;wait for phi2 raising edge
     nop                  [0] ;<-io read timing adjust 0-7
-    out pindirs 8 side 0     ;enable data output
+    set pins 0
+    out pindirs 8            ;enable data output
 .wrap
 
 
 ;Enabling 16kB ROM area reads
 ;Address top bits are compared
 .program mia_rom_read
-.side_set 1 opt
 
 .wrap_target
 start:
@@ -90,7 +87,8 @@ start:
     out y 3                  ;collect MAP,DIR,Phi2
     jmp x!=y start           ;if not MAP,DIR,Phi2 right then jump to start
     mov osr !null       [0]  ;prepare pindirs = 0xff
-    out pindirs 8 side 0     ;enable data output and DIR B->A. disabled in mia_io_read
+    set pins 0
+    out pindirs 8            ;enable data output and DIR B->A. disabled in mia_io_read
 .wrap
 
 ; Oric MAP signal timing
