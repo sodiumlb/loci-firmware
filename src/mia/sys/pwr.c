@@ -24,15 +24,23 @@ static bool pwr_sense_vbus;
 void pwr_init(void)
 {
     pwr_state = PWR_PASSIVE;
-    /*
     pwr_sense_vext = ext_get(EXT_SWVEXT);
     pwr_sense_vbus = ext_get_cached(EXT_SWVBUS);
+
+    /* Hardware rev 1.2 has broken switch setup
     if(pwr_sense_vbus && pwr_sense_vext){   //Power ON on both VEXT and VBUS 
         ext_set_dir(EXT_SWVEXT,true);
         ext_put(EXT_SWVEXT, false);
         pwr_state = PWR_ERROR;
-    }
-    */
+    }*/
+
+   //Turn off EXT power switch if powered from USB
+   if(pwr_sense_vbus && !pwr_sense_vext){
+        ext_set_dir(EXT_SWVEXT, true);
+        ext_put(EXT_SWVEXT, false);
+        pwr_state = PWR_VBUS;
+   }
+
 }
 
 
