@@ -104,6 +104,7 @@ void mia_run(void)
 {
 
     ext_put(EXT_ROMDIS,true);
+    ext_put(EXT_nOE,false);
     //printf("**mia_run()**");
     //ext_set_dir(EXT_ROMDIS,true);
     //mia_set_rom_read_enable(true);
@@ -180,7 +181,7 @@ void mia_stop(void)
     ext_put(EXT_IRQ, false);
     ext_put(EXT_ROMDIS,false);
     //ext_set_dir(EXT_ROMDIS, false);
-    //ext_put(EXT_OE,false);
+    ext_put(EXT_nOE,true);
     mia_set_rom_ram_enable(false,false);
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
@@ -882,7 +883,7 @@ static void mia_read_pio_init(void)
     sm_config_set_in_pins(&config_a, A_PIN_BASE);
     sm_config_set_in_shift(&config_a, false, true, 14);
     sm_config_set_jmp_pin(&config_a, A15_PIN);
-    sm_config_set_sideset_pins(&config_a, DIR_PIN);
+    sm_config_set_set_pins(&config_a, DIR_PIN, 1);
     
         //sm_config_set_out_special(&config, true, false, 0); //sticky output
     //for (int i = D_PIN_BASE; i < D_PIN_BASE + 8; i++)
@@ -979,8 +980,7 @@ static void mia_io_read_pio_init(void)
     sm_config_set_in_shift(&config, false, true, 6);
     sm_config_set_out_pins(&config, D_PIN_BASE, 8);
     sm_config_set_out_shift(&config, true, true, 9);
-    //sm_config_set_set_pins(&config, DIR_PIN, 1);
-    sm_config_set_sideset_pins(&config, DIR_PIN);
+    sm_config_set_set_pins(&config, DIR_PIN, 1);
     //sm_config_set_out_special(&config, true, false, 0); //sticky output
     sm_config_set_jmp_pin(&config, RnW_PIN);
     //pio_gpio_init(RIA_WRITE_PIO, CPU_PHI2_PIN);
@@ -1036,8 +1036,7 @@ static void mia_rom_read_pio_init(void)
     sm_config_set_in_pins(&config, A8_PIN);
     sm_config_set_in_shift(&config, false, false, 0);
     sm_config_set_out_pins(&config, D_PIN_BASE, 8);
-    //sm_config_set_set_pins(&config, DIR_PIN, 1);
-    sm_config_set_sideset_pins(&config, DIR_PIN);
+    sm_config_set_set_pins(&config, DIR_PIN, 1);
     //sm_config_set_sideset_pins(&config, DIR_PIN);
     //sm_config_set_out_special(&config, true, false, 0); //sticky output
     sm_config_set_jmp_pin(&config, RnW_PIN);
@@ -1125,7 +1124,8 @@ void mia_init(void)
     }
     for (int i = D_PIN_BASE; i <= D_PIN_BASE+8; i++)
     {
-        gpio_set_pulls(i, true, true);
+        //gpio_set_pulls(i, true, true);
+        gpio_set_pulls(i, false, false);
         //gpio_set_input_hysteresis_enabled(i, false);
         gpio_set_drive_strength(i, GPIO_DRIVE_STRENGTH_2MA);
     }
