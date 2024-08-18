@@ -1,6 +1,7 @@
 #include "main.h"
 #include "str.h"
 #include <stdio.h>
+#include "api/api.h"
 #include "sys/cfg.h"
 #include "sys/mem.h"
 #include "sys/mia.h"
@@ -83,7 +84,8 @@ static bool adj_scan_requested = false;
 void adj_scan(void){
     adj_scan_requested = true;
 }
-#define ADJ_SCAN_TIME_US 100
+
+#define ADJ_SCAN_TIME_US 200
 void adj_task(void){
     static uint8_t tior; 
     static absolute_time_t adj_timer;
@@ -92,6 +94,7 @@ void adj_task(void){
             if(adj_scan_requested){
                 adj_scan_requested = false;
                 adj_state = ADJ_SCAN;
+                api_return_released();
                 adj_timer = delayed_by_us(get_absolute_time(), ADJ_SCAN_TIME_US);
                 tior = 0;
                 adj_io_read_delay(tior);
@@ -100,12 +103,13 @@ void adj_task(void){
             break;
         case(ADJ_SCAN):
             if(absolute_time_diff_us(get_absolute_time(), adj_timer) < 0){
-                if(tior++ > 31){
+                if(tior > 31){
                     adj_state = ADJ_CLEANUP;
                 }else{
                     adj_timer = delayed_by_us(get_absolute_time(), ADJ_SCAN_TIME_US);
                     adj_io_read_delay(tior);
                     xram[0xFFF0] = 0x80 | tior;
+                    tior++;
                 }
             }
             break;
@@ -114,8 +118,10 @@ void adj_task(void){
             adj_io_read_delay(tior);
             xram[0xFFF0] = tior;
             adj_state = ADJ_IDLE;
+            api_zxstack();
             break;
         default:
             break;
     }
 }
+
