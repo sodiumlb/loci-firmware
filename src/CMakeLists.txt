@@ -130,6 +130,7 @@ target_sources(loci-firmware PRIVATE
     mia/usb/mou.c
     mia/usb/msc.c
     mia/usb/usb.c
+    mia/oric/acia.c
     mia/oric/map.c
     mia/oric/dsk.c
     mia/oric/tap.c
