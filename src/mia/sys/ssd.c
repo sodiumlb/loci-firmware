@@ -357,7 +357,7 @@ void ssd_init(void)
 void ssd_task(void)
 {
     if(ssd_got_action_word){
-        printf("##%08lx##",ssd_action_word);
+        printf("##%08lx##", ssd_action_is_wr ? ssd_action_word : ssd_action_rword);
         ssd_got_action_word = false;
     }
     ssd_tx_framebuffer();
