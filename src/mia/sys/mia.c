@@ -477,7 +477,7 @@ int mia_read_dma_channel;
 //#define CASE_WRITE(addr) (0x20 | (addr & 0x1F))
 #define CASE_READ(addr) (addr & 0x0000FFFF)
 #define CASE_WRITE(addr) (0x01000000 | (addr & 0x0000FFFF))
-#define MIA_RW0 REGS(0x03A4)
+#define MIA_RW0 IOREGS(0x03A4)
 #define MIA_STEP0 *(int8_t *)&IOREGS(0x03A5)
 #define MIA_ADDR0 IOREGSW(0x03A6)
 #define MIA_RW1 IOREGS(0x03A8)
