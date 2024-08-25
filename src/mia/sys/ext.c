@@ -62,6 +62,7 @@ static enum {
     EXT_IDLE,
     EXT_LOADING_DEVROM,
     EXT_LOADING_BIOS,
+    EXT_BOOT_LOCI,
 } ext_state;
 
 
@@ -167,6 +168,33 @@ static enum {
     EXT_BOOT_EMB,
 } ext_boot_src;
 
+void ext_boot_loci(void){
+    ext_boot_src = EXT_BOOT_USB;
+    rom_mon_load("locirom.rp6502", 14);    //First ROM priority: USB storage
+    if(!rom_active()){
+        ext_boot_src = EXT_BOOT_INT;
+        rom_load("LOCIROM",7);             //Second ROM priority: new name in flash
+    }
+    if(rom_active()){
+        ext_state = EXT_LOADING_BIOS;
+    }
+#ifdef EMBEDDED_LOCIROM
+    else{
+        ext_state = EXT_IDLE;
+        ext_boot_src = EXT_BOOT_EMB;
+        ext_embedded_rom(locirom, locirom_size, 0xC000);
+        ext_patch_version();
+        ext_patch_timings();
+        main_run();
+    }
+#endif
+    printf("Booting ROM from %s\n",(
+        ext_boot_src==EXT_BOOT_USB ? "USB" :
+        ext_boot_src==EXT_BOOT_INT ? "internal flash" :
+        "firmware"));
+
+}
+
 void ext_task(void)
 {
     switch(ext_state){
@@ -188,6 +216,10 @@ void ext_task(void)
                 main_run();
               }
             break;
+        case EXT_BOOT_LOCI:
+            if(!main_active())
+                ext_boot_loci();
+            break;
     }
 
     if(ext_refresh_cnt--)
@@ -203,33 +235,14 @@ void ext_task(void)
     if(!main_active()){
         if(ext_btn_released(EXT_BTN_A)){
             if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
-                ext_boot_src = EXT_BOOT_USB;
-                rom_mon_load("locirom.rp6502", 14);    //First ROM priority: USB storage
-                if(!rom_active()){
-                    ext_boot_src = EXT_BOOT_INT;
-                    rom_load("LOCIROM",7);             //Second ROM priority: new name in flash
-                }
-                if(rom_active()){
-                    ext_state = EXT_LOADING_BIOS;
-                }
-#ifdef EMBEDDED_LOCIROM
-                else{
-                    ext_boot_src = EXT_BOOT_EMB;
-                    ext_embedded_rom(locirom, locirom_size, 0xC000);
-                    ext_patch_version();
-                    ext_patch_timings();
-                    main_run();
-                }
-#endif
+                ext_put(EXT_RESET,true);
+                ext_state = EXT_BOOT_LOCI;
             }
-            printf("Booting ROM from %s\n",(
-                ext_boot_src==EXT_BOOT_USB ? "USB" :
-                ext_boot_src==EXT_BOOT_INT ? "internal flash" :
-                "firmware"));
         }
     }else{
         if(ext_btn_released(EXT_BTN_A)){
             main_break();
+            ext_state = EXT_BOOT_LOCI;
         }
     }
     if(ext_get_cached(EXT_BTN_A) && (absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) > 0)){

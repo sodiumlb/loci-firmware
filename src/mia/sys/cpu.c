@@ -32,15 +32,7 @@ static uint32_t cpu_ctrl_bits;
 void cpu_init(void)
 {
     // drive reset pin
-/*
-    gpio_init(CPU_RESB_PIN);
-    gpio_put(CPU_RESB_PIN, false);
-    gpio_set_dir(CPU_RESB_PIN, true);
-
-*/
-    //ext_put(EXT_nRESET,false);
-    ext_put(EXT_RESET,true);
-    //ext_set_dir(EXT_nRESET,true);
+    //ext_put(EXT_RESET,true);
 }
 
 void cpu_reclock(void)
