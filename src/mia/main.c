@@ -263,6 +263,9 @@ bool main_api(uint8_t operation)
     case 0x91:
         mnt_api_umount();
         break;
+    case 0x92:
+        tap_api_counter();
+        break;
     case 0xA0:
         mia_api_boot();
         break;
