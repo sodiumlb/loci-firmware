@@ -16,6 +16,7 @@
 #include "sys/mia.h"
 #include "sys/led.h"
 #include "fatfs/ff.h"
+#include "api/api.h"
 
 //Track buffer
 //volatile uint8_t tap_buf[1024];
@@ -74,11 +75,25 @@ bool tap_mount_fat(FIL* fat_file){
     return true;
 }
 
+bool tap_is_mounted(void){
+    return tap_drive.type != EMPTY;
+}
+
 
 void tap_umount(void){
-    //TODO Cleanup?
     tap_set_status(TAP_STAT_NOT_READY,true);
+    switch(tap_drive.type){
+        case LFS:
+            lfs_file_close(&lfs_volume, tap_drive.lfs_file);
+            break;
+        case FAT:
+            f_close(tap_drive.fat_file);
+            break;
+        default:
+            break;
+    }
     tap_drive.type = EMPTY;
+    tap_drive.counter = 0;
 }
 
 void tap_rewind(void){
@@ -93,6 +108,25 @@ void tap_rewind(void){
             break;
     }
     tap_drive.counter = 0;
+}
+
+uint32_t tap_seek(uint32_t pos){
+    uint32_t new_pos = pos;
+    switch(tap_drive.type){
+        case LFS:
+            if(lfs_file_seek(&lfs_volume, tap_drive.lfs_file, pos, LFS_SEEK_SET ) < 0)
+                new_pos = lfs_file_seek(&lfs_volume, tap_drive.lfs_file, 0, LFS_SEEK_END);
+            break;
+        case FAT:
+            f_lseek(tap_drive.fat_file, pos);
+            new_pos = f_tell(tap_drive.fat_file);
+            break;
+        default:
+            new_pos = 0;
+            break;
+    }
+    tap_drive.counter = new_pos;
+    return new_pos;
 }
 
 enum TAP_STATE { TAP_IDLE, TAP_READ, TAP_WRITE, TAP_CLEANUP } tap_state = TAP_IDLE;
@@ -178,9 +212,18 @@ void tap_task(void){
     }
 }
 
-void tap_act(uint8_t data){
+void __not_in_flash() tap_act(uint8_t data){
     led_set(data & 0x40);
     //led_toggle();
     //tap_set_status(TAP_STAT_BUSY,true); //Holds Oric waiting and triggers tap_task() execution
 }
 
+//Set/Get counter (aka seek). Zero in request returns current counter. Use rewind to go to pos zero.
+void tap_api_counter(void){
+    uint32_t tmp;
+    tmp = API_AXSREG;
+    if(tmp && tap_is_mounted())
+        api_return_axsreg(tap_seek(tmp));
+    else
+        api_return_axsreg(tap_drive.counter);
+}
