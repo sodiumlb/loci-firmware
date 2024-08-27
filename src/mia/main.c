@@ -147,6 +147,7 @@ static void stop(void)
     std_stop();
     kbd_stop();
     mou_stop();
+    dsk_stop();
     acia_stop();
 }
 

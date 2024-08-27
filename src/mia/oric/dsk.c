@@ -555,8 +555,12 @@ void dsk_task(void){
     IOREGS(DSK_IO_CTRL) = dsk_reg_irq;      //Not directly mapped due to combined with CTRL
 }
 
-void dsk_run(void){
-    
+//Stop activity but keep mounts
+void dsk_stop(void){
+    dsk_irq_enable = false;
+    led_set(false);
+    dsk_set_status(DSK_STAT_BUSY, false);
+    dsk_state = DSK_IDLE;
 }
 
 /*
