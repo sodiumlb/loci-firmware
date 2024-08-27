@@ -82,7 +82,7 @@ void cpu_task(void)
             //gpio_put(CPU_RESB_PIN, true);
             //ext_put(EXT_nRESET, true);
             ext_put(EXT_RESET, false);
-            ext_pulse(EXT_RESET);       //Reset may have been held _too_ long too. Trying extra reset pulse for improved stability
+            //ext_pulse(EXT_RESET);       //Reset may have been held _too_ long too. Trying extra reset pulse for improved stability
             //ext_set_dir(EXT_nRESET,true);
         }
     }
