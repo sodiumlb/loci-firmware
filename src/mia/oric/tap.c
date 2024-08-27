@@ -27,8 +27,11 @@ typedef struct _tap_drive_t {
     lfs_file_t *lfs_file;
     FIL *fat_file;
     uint32_t counter;
+    uint8_t lead_in;
     uint8_t filename[16];
 } tap_drive_t;
+
+#define TAP_LEAD_IN_LEN 8
 
 tap_drive_t tap_drive = {0};
 
@@ -94,6 +97,7 @@ void tap_umount(void){
     }
     tap_drive.type = EMPTY;
     tap_drive.counter = 0;
+    tap_drive.lead_in = 0;
 }
 
 void tap_rewind(void){
@@ -108,6 +112,7 @@ void tap_rewind(void){
             break;
     }
     tap_drive.counter = 0;
+    tap_drive.lead_in = 0;
 }
 
 uint32_t tap_seek(uint32_t pos){
@@ -126,6 +131,8 @@ uint32_t tap_seek(uint32_t pos){
             break;
     }
     tap_drive.counter = new_pos;
+    if(new_pos == 0)
+        tap_drive.lead_in = 0;
     return new_pos;
 }
 
@@ -135,9 +142,9 @@ bool tap_read_byte(void){
     bool fs_ret = false;
     UINT br;
     FRESULT fr;
-    if(tap_drive.counter < 8){
+    if(tap_drive.lead_in < TAP_LEAD_IN_LEN){
         IOREGS(TAP_IO_DATA) = 0x16;
-        tap_drive.counter++;
+        tap_drive.lead_in++;
     }else{
         switch(tap_drive.type){
             case LFS:
