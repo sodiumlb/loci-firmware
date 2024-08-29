@@ -237,12 +237,11 @@ const uint8_t __in_flash() mia_cload_patch_11[] = {
 };
 
 /* Basic 1.1 CLOAD synch patch
-A2 00                LDX #$00
-EA                   NOP
+4C 4D E7             JMP $E74D
 */
-#define SYNCH_PATCH_11_ADDR (0xE4AC)
+#define SYNCH_PATCH_11_ADDR (0xE735)
 const uint8_t __in_flash() mia_synch_patch_11[] = {
-0xA2, 0x00, 0xEA
+    0x4C, 0x4D, 0xE7 
 };
 
 void mia_task(void)
@@ -1121,7 +1120,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //Don�t Enable levelshifters yet
+    //DonÃÂ´t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 
