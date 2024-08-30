@@ -363,8 +363,7 @@ int main(void)
         if (main_state == stopping)
         {
             stop();
-            if (main_state != starting)
-                main_state = stopped;
+            main_state = stopped;
         }
         if (is_breaking)
         {

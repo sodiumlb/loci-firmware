@@ -26,8 +26,6 @@
 #include "oric/dsk.h"
 #include "oric/tap.h"
 
-// This is the smallest value that will
-// allow 1k read/write operations at 50 kHz.
 #define MIA_WATCHDOG_MS 250
 
 //volatile uint8_t mia_iopage_enable_map[64] __attribute__((aligned(64)));
@@ -41,12 +39,12 @@ static enum state {
 } volatile action_state = action_state_idle;
 static absolute_time_t action_watchdog_timer;
 static volatile int32_t action_result = -1;
-static uint32_t action_retries;
 static int32_t saved_reset_vec = -1;
 static uint16_t rw_addr;
 static volatile int32_t rw_pos;
 static volatile int32_t rw_end;
 static volatile bool irq_enabled;
+static volatile bool reset_requested;
 
 #define MIA_BOOTSET_FDC 0x01
 #define MIA_BOOTSET_TAP 0x02
@@ -115,13 +113,18 @@ void mia_run(void)
     //ext_put(EXT_nRESET,true);
   
     mia_io_errors = 0;
+    reset_requested = false;
 
-    mia_set_watch_address(0xFFE2);
+    //mia_set_watch_address(0xFFE2);
+    //Normal emulated boot
     if (action_state == action_state_idle)
         return;
+
+    //Special LOCI access to Oric RAM actions
+    
     action_result = -1;
-    saved_reset_vec = REGSW(0xFFFC);
-    REGSW(0xFFFC) = 0xFFF0;
+    saved_reset_vec = XRAMW(0xFFFC);
+    XRAMW(0xFFFC) = 0x03B0;
     action_watchdog_timer = delayed_by_us(get_absolute_time(),
                                           cpu_get_reset_us() +
                                               MIA_WATCHDOG_MS * 1000);
@@ -137,8 +140,8 @@ void mia_run(void)
         // 03B0  B8        CLV
         // 03B1  A9 00     LDA #$00
         // 03B3  8D 00 00  STA $0000
-        // 03B6  80 F9     BVC $FFF0
-        // 03B8  80 FE     BVC $FFF7
+        // 03B6  50 F9     BVC $03B1
+        // 03B8  50 FE     BVC $03B8
         //mia_set_watch_address(0xFFF6);
         IOREGS(0x03B0) = 0xB8;
         IOREGS(0x03B1) = 0xA9;
@@ -157,10 +160,11 @@ void mia_run(void)
         // FFF0  AD 00 00  LDA $0000
         // FFF3  8D FC FF  STA $FFFC/$FFFD
         // FFF6  80 F8     BRA $FFF0
+        //Oric mod: CLV + BVC to get BRA 
         // 03B0  B8        CLV
         // 03B1  AD 00 00  LDA $0000
-        // 03B4  8D FC FF  STA $FFFC/$FFFD
-        // 03B7  80 F8     BRA $FFF0
+        // 03B4  8D BC 03  STA $03BC/$03BD
+        // 03B7  50 F8     BVC $03B1
         IOREGS(0x03B0) = 0xB8;
         IOREGS(0x03B1) = 0xAD;
         IOREGS(0x03B2) = rw_addr & 0xFF;
@@ -186,28 +190,11 @@ void mia_stop(void)
     mia_set_rom_ram_enable(false,false);
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
-    
-    if ((action_state == action_state_read || action_state == action_state_write) &&
-        action_result == -2 && action_retries > 0)
+    action_state = action_state_idle;
+    if (saved_reset_vec >= 0)
     {
-        // The CPU may not come out of reset after
-        // having been in reset for a long time.
-        // Retry the watchdog timeouts.
-        action_retries--;
-        main_run();
-#ifndef NDEBUG
-        //TODO remove message after verifying this workaround is valid
-        printf("Watchdog Retry, state = %d\n", action_state);
-#endif
-    }
-    else
-    {
-        action_state = action_state_idle;
-        if (saved_reset_vec >= 0)
-        {
-            REGSW(0xFFFC) = saved_reset_vec;
-            saved_reset_vec = -1;
-        }
+        XRAMW(0xFFFC) = saved_reset_vec;
+        saved_reset_vec = -1;
     }
 }
 
@@ -244,17 +231,18 @@ const uint8_t __in_flash() mia_synch_patch_11[] = {
     0x4C, 0x4D, 0xE7 
 };
 
+
 void mia_task(void)
 {
     static uint32_t prev_io_errors = 0;
-    // check on watchdog
-    if (mia_active())
+    // check on watchdog unless we explicitly ended or errored
+    if (mia_active() && action_result == -1)
     {
         absolute_time_t now = get_absolute_time();
         if (absolute_time_diff_us(now, action_watchdog_timer) < 0)
         {
-            ssd_write_text(0,3,true,"****TIMEOUT****");
-            action_result = -2;
+            printf("****TIMEOUT****\n");
+            action_result = -3;
             main_stop();
         }
     }
@@ -314,16 +302,21 @@ void mia_task(void)
         }
         prev_io_errors = mia_io_errors;
     }
+    if(reset_requested){
+        ext_put(EXT_RESET,true);
+        reset_requested = false;
+    }
 }
 
 bool mia_print_error_message(void)
 {
     switch (action_result)
     {
-    case -1: // OK
+    case -1: // OK, default at start
+    case -2: // OK, explicitly ended
         return false;
         break;
-    case -2:
+    case -3:
         printf("?watchdog timeout\n");
         break;
     default:
@@ -352,7 +345,6 @@ void mia_read_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_read;
-    action_retries = 1;
     main_run();
 }
 
@@ -373,7 +365,6 @@ void mia_verify_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_verify;
-    action_retries = 1;
     main_run();
 }
 
@@ -393,7 +384,6 @@ void mia_write_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_write;
-    action_retries = 1;
     main_run();
 }
 
@@ -591,48 +581,54 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                     break;
 
                 //RP6502-like interface
-                case CASE_READ(0x03B6): // action write
+                case CASE_READ(0x03B7): // action write
                     if (rw_pos < rw_end)
                     {
                         if (rw_pos > 0)
                         {
-                            IOREGS(0x03B1) = mbuf[rw_pos];
-                            IOREGSW(0x03B3) += 1;
+                            IOREGS(0x03B2) = mbuf[rw_pos];
+                            IOREGSW(0x03B4) += 1;
                         }
                         if (++rw_pos == rw_end)
-                            IOREGS(0x03B6) = 0x00;
+                            IOREGS(0x03B7) = 0x00;
                     }
-                    else
+                    else if(action_state == action_state_write)
                     {
                         //TODO proper handling on Oric
                         //gpio_put(CPU_RESB_PIN, false);
-                        //main_stop();
+                        reset_requested = true;
+                        action_result = -2;
+                        main_stop();
                     }
                     break;
                 case CASE_WRITE(0x03BD): // action read
                     if (rw_pos < rw_end)
                     {
-                        IOREGSW(0x03B1) += 1;
+                        IOREGSW(0x03B2) += 1;
                         mbuf[rw_pos] = data;
                         if (++rw_pos == rw_end)
                         {
                             //TODO proper handling on Oric
                             //gpio_put(CPU_RESB_PIN, false);
-                            //main_stop();
+                            reset_requested = true;
+                            action_result = -2;
+                            main_stop();
                         }
                     }
                     break;
                 case CASE_WRITE(0x03BC): // action verify
                     if (rw_pos < rw_end)
                     {
-                        IOREGSW(0x03B1) += 1;
+                        IOREGSW(0x03B2) += 1;
                         if (mbuf[rw_pos] != data && action_result < 0)
-                            action_result = REGSW(0xFFF1) - 1;
+                            action_result = IOREGSW(0x0382) - 1;
                         if (++rw_pos == rw_end)
                         {
                             //TODO proper handling on Oric
                             //gpio_put(CPU_RESB_PIN, false);
-                            //main_stop();
+                            reset_requested = true;
+                            action_result = -2;
+                            main_stop();
                         }
                     }
                     break;
@@ -654,7 +650,8 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                     {
                         //TODO proper handling on Oric
                         //gpio_put(CPU_RESB_PIN, false);
-                        //main_stop();
+                        reset_requested = true;
+                        main_stop();
                     }
                     break;
                 case CASE_WRITE(0x03AC): // xstack
@@ -743,13 +740,15 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
     
                 }
             /*
-                if((rw_data_addr & 0x0000FFF0) == 0x00000310){
+                if((rw_data_addr & 0x0000FFF0) == 0x000003B0){
+                    //ssd_got_action_word = true;
                     if(rw_data_addr >> 24){
                         ssd_action_word = rw_data_addr;
                         ssd_action_is_wr = true;
                     }else{
-                        static uint8_t cnt = 0;
-                        ssd_action_rword = rw_data_addr | (cnt++ <<16);
+                        //static uint8_t cnt = 0;
+                        //ssd_action_rword = rw_data_addr | (cnt++ <<16);
+                        ssd_action_rword = (rw_data_addr & 0xFF00FFFF) | (IOREGS(rw_data_addr & 0xFFFF) << 16);
                         ssd_action_is_wr = false;
                     }
                 }
@@ -1120,7 +1119,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //DonÃÂ´t Enable levelshifters yet
+    //Don�t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 
