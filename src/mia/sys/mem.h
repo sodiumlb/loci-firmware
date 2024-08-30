@@ -33,6 +33,8 @@ asm(".equ oric_bank1, 0x20004000");     //cumini rom
 asm(".equ oric_bank2, 0x20008000");     //device rom
 asm(".equ oric_bank3, 0x2000C000");     //basic rom 
 
+#define XRAMW(addr) ((uint16_t *)&xram[addr])[0]
+
 //Oric IO space register address macro
 // IO page and registers are located at the bottom of cpu1 stack.
 // cpu1 runs the action loop and uses very little stack.
