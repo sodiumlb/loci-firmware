@@ -27,9 +27,23 @@ typedef struct _tap_drive_t {
     lfs_file_t *lfs_file;
     FIL *fat_file;
     uint32_t counter;
+    uint32_t size;
     uint8_t lead_in;
     uint8_t filename[16];
 } tap_drive_t;
+
+typedef struct _tap_header_t {
+    uint8_t flag_int;
+    uint8_t flag_str;
+    uint8_t type;
+    uint8_t autorun;
+    uint8_t end_addr_hi;
+    uint8_t end_addr_lo;
+    uint8_t start_addr_hi;
+    uint8_t start_addr_lo;
+    uint8_t reserved;
+    uint8_t filename[16];
+} tap_header_t;
 
 #define TAP_LEAD_IN_LEN 8
 
@@ -42,6 +56,16 @@ tap_drive_t tap_drive = {0};
 #define TAP_CMD_PLAY        (0x01)
 #define TAP_CMD_REC         (0x02)
 #define TAP_CMD_REW         (0x03)
+#define TAP_CMD_READ_BIT    (0x04)
+
+bool tap_parity(uint8_t byte){
+    uint32_t parity = 0;
+    for(uint8_t i=0; i<8; i++){
+        if( (byte>>i) & 0x01 )
+            parity++; 
+    }
+    return !!(parity & 0x01);
+}
 
 //volatile uint8_t *tap_reg_stat = &IOREGS(TAP_IO_STAT);
 
@@ -62,6 +86,7 @@ bool tap_mount_lfs(lfs_file_t *lfs_file){
     tap_drive.type = LFS;
     tap_drive.lfs_file = lfs_file;
     tap_drive.counter = 0;
+    tap_drive.size = lfs_file_size(&lfs_volume, lfs_file);
     tap_set_status(TAP_STAT_NOT_READY,false);
     return true;
 /*    }else{
@@ -74,6 +99,7 @@ bool tap_mount_fat(FIL* fat_file){
     tap_drive.type = FAT;
     tap_drive.fat_file = fat_file;
     tap_drive.counter = 0;
+    tap_drive.size = f_size(fat_file);
     tap_set_status(TAP_STAT_NOT_READY,false);
     return true;
 }
@@ -178,6 +204,8 @@ void tap_init(void){
     IOREGS(TAP_IO_CMD)  = 0x00; 
     IOREGS(TAP_IO_DATA) = 0x00;
     tap_state = TAP_IDLE;
+    tap_drive.type = EMPTY;
+    tap_drive.counter = 0;
 }
 
 void tap_task(void){
@@ -225,12 +253,100 @@ void __not_in_flash() tap_act(uint8_t data){
     //tap_set_status(TAP_STAT_BUSY,true); //Holds Oric waiting and triggers tap_task() execution
 }
 
-//Set/Get counter (aka seek). Zero in request returns current counter. Use rewind to go to pos zero.
-void tap_api_counter(void){
-    uint32_t tmp;
-    tmp = API_AXSREG;
-    if(tmp && tap_is_mounted())
-        api_return_axsreg(tap_seek(tmp));
+//Set/Get counter (aka seek).
+void tap_api_seek(void){
+    uint32_t pos;
+    pos = API_AXSREG;
+    if(pos >= tap_drive.size)
+        pos = tap_drive.size-1;
+    if(tap_is_mounted())
+        api_return_axsreg(tap_seek(pos));
     else
+        api_return_errno(API_ENODEV);
+}
+
+//Get counter
+void tap_api_tell(void){
         api_return_axsreg(tap_drive.counter);
+}
+
+bool tap_seek_next_header(uint32_t start, uint32_t end, uint32_t* pos){
+    for(uint32_t i=start; i<end-4; i++){
+        //End of sync mark
+        if( mbuf[i]   == 0x16 &&
+            mbuf[i+1] == 0x16 &&
+            mbuf[i+2] == 0x16 &&
+            mbuf[i+3] == 0x24
+        ){
+            *pos = i+4;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool char_is_txt(uint8_t ch){
+    return (ch > 31 && ch < 128);
+}
+
+
+void tap_api_read_header(void){
+    bool found = false;
+    UINT br = 0;
+    FRESULT fr;
+    tap_header_t header;
+
+    uint32_t pos = tap_drive.counter;
+    uint32_t hpos;
+    api_zxstack();
+    if(tap_drive.type == EMPTY)
+        return api_return_errno(API_ENODEV);
+
+    if(pos >= tap_drive.size - sizeof(tap_header_t))
+        return api_return_errno(API_ENOENT);
+
+    do{
+        switch(tap_drive.type){
+            case LFS:
+                br = lfs_file_read(&lfs_volume, tap_drive.lfs_file, mbuf, MBUF_SIZE);
+                break;
+            case FAT:
+                fr = f_read(tap_drive.fat_file, mbuf, MBUF_SIZE, &br);
+                if(fr != FR_OK)
+                    return api_return_errno(API_EFATFS(fr));
+                break;
+            default:
+                return api_return_errno(API_ENODEV);
+                break;
+        }
+        found = tap_seek_next_header(0, br, &hpos);
+        pos += found ? hpos : MBUF_SIZE-4;    //Set to found pos or next block (minus one synch)
+        tap_seek(pos);
+    }while((br == MBUF_SIZE) && !found);
+    
+    if(!found)
+        return api_return_errno(API_ENOENT);
+    //Format return if found
+    switch(tap_drive.type){
+        case LFS:
+            br = lfs_file_read(&lfs_volume, tap_drive.lfs_file, &header, sizeof(tap_header_t));
+            break;
+        case FAT:
+            fr = f_read(tap_drive.fat_file, &header, sizeof(tap_header_t), &br);
+            break;
+        default:
+            break;
+    }
+    header.filename[15] = '\0'; //safe guard
+    //Replace non-text characters in name with '?'
+    for(uint32_t i=0; i<strlen((char*)(header.filename)); i++){
+        if(!char_is_txt(header.filename[i])){
+            header.filename[i] = '?';
+        }
+    }
+    api_set_axsreg((int32_t)(pos-4));  //Point back to synch bytes
+    xstack_ptr = XSTACK_SIZE - sizeof(tap_header_t);
+    memcpy((void*)&xstack[xstack_ptr], &header, sizeof(tap_header_t));
+    api_sync_xstack();
+    api_return_released();
 }
