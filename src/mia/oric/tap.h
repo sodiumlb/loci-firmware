@@ -30,6 +30,7 @@ bool tap_mount_lfs(lfs_file_t *lfs_file);
 bool tap_mount_fat(FIL* fat_file);
 void tap_umount(void);
 
-void tap_api_counter(void);
-
+void tap_api_seek(void);
+void tap_api_tell(void);
+void tap_api_read_header(void);
 #endif /* _TAP_H_ */
