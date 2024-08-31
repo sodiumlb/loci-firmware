@@ -182,7 +182,7 @@ void ext_boot_loci(void){
     else{
         ext_state = EXT_IDLE;
         ext_boot_src = EXT_BOOT_EMB;
-        ext_embedded_rom(locirom, locirom_size, 0xC000);
+        ext_embedded_rom(&locirom[0], locirom_size, 0xC000);
         ext_patch_version();
         ext_patch_timings();
         main_run();
