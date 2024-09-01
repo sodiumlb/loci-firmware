@@ -296,11 +296,11 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
                             xram[SYNCH_PATCH_11_ADDR+i] = mia_synch_patch_11[i];
                         }
-                        if(mia_boot_settings & MIA_BOOTSET_TAP_BIT){
-                            for(uint16_t i=0; i<sizeof(mia_read_bit_patch_11); i++){
-                                xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch_11[i];
-                            }
-                        }else{
+                        for(uint16_t i=0; i<sizeof(mia_read_bit_patch_11); i++){
+                            xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch_11[i];
+                        }
+                        //Disable byte patch if bit mode is enabledß
+                        if(!(mia_boot_settings & MIA_BOOTSET_TAP_BIT)){     
                             for(uint16_t i=0; i<sizeof(mia_cload_patch_11); i++){
                                 xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch_11[i];
                             }
