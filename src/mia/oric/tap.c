@@ -28,8 +28,10 @@ typedef struct _tap_drive_t {
     FIL *fat_file;
     uint32_t counter;
     uint32_t size;
+    uint16_t encoded_byte;
     uint8_t lead_in;
     uint8_t filename[16];
+    uint8_t bit_counter;
 } tap_drive_t;
 
 typedef struct _tap_header_t {
@@ -58,13 +60,17 @@ tap_drive_t tap_drive = {0};
 #define TAP_CMD_REW         (0x03)
 #define TAP_CMD_READ_BIT    (0x04)
 
-bool tap_parity(uint8_t byte){
-    uint32_t parity = 0;
+uint8_t tap_parity(uint8_t byte){
+    uint8_t parity = 1;
     for(uint8_t i=0; i<8; i++){
         if( (byte>>i) & 0x01 )
             parity++; 
     }
-    return !!(parity & 0x01);
+    return parity & 0x01;
+}
+
+uint16_t tap_encode_byte(uint8_t byte){
+    return 0b11110000000000 | (tap_parity(byte) << 9) | byte << 1;
 }
 
 //volatile uint8_t *tap_reg_stat = &IOREGS(TAP_IO_STAT);
@@ -86,6 +92,7 @@ bool tap_mount_lfs(lfs_file_t *lfs_file){
     tap_drive.type = LFS;
     tap_drive.lfs_file = lfs_file;
     tap_drive.counter = 0;
+    tap_drive.bit_counter = 0;
     tap_drive.size = lfs_file_size(&lfs_volume, lfs_file);
     tap_set_status(TAP_STAT_NOT_READY,false);
     return true;
@@ -99,6 +106,7 @@ bool tap_mount_fat(FIL* fat_file){
     tap_drive.type = FAT;
     tap_drive.fat_file = fat_file;
     tap_drive.counter = 0;
+    tap_drive.bit_counter = 0;
     tap_drive.size = f_size(fat_file);
     tap_set_status(TAP_STAT_NOT_READY,false);
     return true;
@@ -123,6 +131,7 @@ void tap_umount(void){
     }
     tap_drive.type = EMPTY;
     tap_drive.counter = 0;
+    tap_drive.bit_counter = 0;
     tap_drive.lead_in = 0;
 }
 
@@ -138,6 +147,7 @@ void tap_rewind(void){
             break;
     }
     tap_drive.counter = 0;
+    tap_drive.bit_counter = 0;
     tap_drive.lead_in = 0;
 }
 
@@ -162,25 +172,26 @@ uint32_t tap_seek(uint32_t pos){
     return new_pos;
 }
 
-enum TAP_STATE { TAP_IDLE, TAP_READ, TAP_WRITE, TAP_CLEANUP } tap_state = TAP_IDLE;
+enum TAP_STATE { TAP_IDLE, TAP_READ_BYTE, TAP_WRITE, TAP_READ_BIT, TAP_CLEANUP } tap_state = TAP_IDLE;
 
-bool tap_read_byte(void){
+uint8_t tap_read_byte(void){
     bool fs_ret = false;
     UINT br;
     FRESULT fr;
+    uint8_t data;
     if(tap_drive.lead_in < TAP_LEAD_IN_LEN){
-        IOREGS(TAP_IO_DATA) = 0x16;
+        data = 0x16;
         tap_drive.lead_in++;
     }else{
         switch(tap_drive.type){
             case LFS:
-                if(lfs_file_read(&lfs_volume, tap_drive.lfs_file, (void *) &IOREGS(TAP_IO_DATA), 1) == 1){
+                if(lfs_file_read(&lfs_volume, tap_drive.lfs_file, (void *) &data, 1) == 1){
                     tap_drive.counter++;
                     fs_ret = true;
                 };
                 break;
             case FAT:
-                fr = f_read(tap_drive.fat_file, (void *) &IOREGS(TAP_IO_DATA), 1, &br);
+                fr = f_read(tap_drive.fat_file, (void *) &data, 1, &br);
                 if(fr == FR_OK && br == 1){
                     tap_drive.counter++;
                     fs_ret = true;
@@ -190,13 +201,13 @@ bool tap_read_byte(void){
                 break;
                 //TODO error
         }
-    }
-    //Return zero when nothing is read 
-    if(!fs_ret){
-        IOREGS(TAP_IO_DATA) = 0x00;
+        //Return zero when nothing is read 
+        if(!fs_ret){
+            data = 0x00;
+        }
     }
 
-    return true;
+    return data;
 }
 
 void tap_init(void){
@@ -206,6 +217,7 @@ void tap_init(void){
     tap_state = TAP_IDLE;
     tap_drive.type = EMPTY;
     tap_drive.counter = 0;
+    tap_drive.bit_counter = 0;
 }
 
 void tap_task(void){
@@ -213,7 +225,7 @@ void tap_task(void){
         case TAP_IDLE:
             switch(IOREGS(TAP_IO_CMD)){
                 case TAP_CMD_PLAY:
-                    tap_state = TAP_READ;
+                    tap_state = TAP_READ_BYTE;
                     tap_set_status(TAP_STAT_BUSY,true);
                     break;
                 case TAP_CMD_REC:
@@ -225,17 +237,34 @@ void tap_task(void){
                     tap_rewind();
                     tap_state = TAP_CLEANUP;
                    break;
+                case TAP_CMD_READ_BIT:
+                    tap_set_status(TAP_STAT_BUSY,true);
+                    tap_state = TAP_READ_BIT;
+                    break;
                  default:
                     break;
             }
             break;
-        case TAP_READ:
+        case TAP_READ_BYTE:
             if(IOREGS(TAP_IO_STAT) & TAP_STAT_BUSY){
-                tap_read_byte();
+                IOREGS(TAP_IO_DATA) = tap_read_byte();
                 tap_set_status(TAP_STAT_BUSY,false);
-                tap_state = TAP_CLEANUP;
+                IOREGS(TAP_IO_CMD) = 0x00;
+                tap_state = TAP_IDLE;
             }
             break;
+        case TAP_READ_BIT:
+            if(IOREGS(TAP_IO_STAT) & TAP_STAT_BUSY){
+                if(tap_drive.bit_counter == 0){
+                    tap_drive.encoded_byte = tap_encode_byte(tap_read_byte());
+                }
+                IOREGS(TAP_IO_DATA) = (tap_drive.encoded_byte >> tap_drive.bit_counter) & 0x01;
+                if(++tap_drive.bit_counter >= 14)
+                    tap_drive.bit_counter = 0;
+                tap_set_status(TAP_STAT_BUSY,false);
+                IOREGS(TAP_IO_CMD) = 0x00;
+                tap_state = TAP_IDLE;
+            }
         case TAP_WRITE:
             break;
         case TAP_CLEANUP:
@@ -247,10 +276,9 @@ void tap_task(void){
     }
 }
 
+//Show tape motor status on LED
 void __not_in_flash() tap_act(uint8_t data){
     led_set(data & 0x40);
-    //led_toggle();
-    //tap_set_status(TAP_STAT_BUSY,true); //Holds Oric waiting and triggers tap_task() execution
 }
 
 //Set/Get counter (aka seek).
