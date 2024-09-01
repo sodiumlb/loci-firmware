@@ -49,6 +49,7 @@ static volatile bool reset_requested;
 #define MIA_BOOTSET_FDC 0x01
 #define MIA_BOOTSET_TAP 0x02
 #define MIA_BOOTSET_B11 0x04
+#define MIA_BOOTSET_TAP_BIT 0x08
 #define MIA_BOOTSET_FAST 0x80
 
 static uint8_t mia_boot_settings;
@@ -231,6 +232,23 @@ const uint8_t __in_flash() mia_synch_patch_11[] = {
     0x4C, 0x4D, 0xE7 
 };
 
+/* Basic 1.1 CLOAD read bit patch
+48                   PHA
+A9 04                LDA #$04
+8D 15 03             STA $0315
+AD 15 03   WAIT:     LDA $0315
+D0 FB                BNE WAIT
+AD 17 03             LDA $0317
+6A                   ROR A
+68                   PHA
+60                   RTS
+*/
+#define READ_BIT_PATCH_11_ADDR (0xE71C)
+const uint8_t __in_flash() mia_read_bit_patch_11[] = {
+    0x48, 0xA9, 0x04, 0x8D, 0x15, 0x03, 0xAD, 0x15, 
+    0x03, 0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x6A, 0x68, 
+    0x60
+};
 
 void mia_task(void)
 {
@@ -278,8 +296,14 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
                             xram[SYNCH_PATCH_11_ADDR+i] = mia_synch_patch_11[i];
                         }
-                        for(uint16_t i=0; i<sizeof(mia_cload_patch_11); i++){
-                            xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch_11[i];
+                        if(mia_boot_settings & MIA_BOOTSET_TAP_BIT){
+                            for(uint16_t i=0; i<sizeof(mia_read_bit_patch_11); i++){
+                                xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch_11[i];
+                            }
+                        }else{
+                            for(uint16_t i=0; i<sizeof(mia_cload_patch_11); i++){
+                                xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch_11[i];
+                            }
                         }
                      }else{
                         printf("CLOAD patch for BASIC10 not implemented\n");
