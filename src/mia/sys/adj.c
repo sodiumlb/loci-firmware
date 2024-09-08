@@ -80,7 +80,7 @@ void adj_scan(void){
     adj_scan_requested = true;
 }
 
-#define ADJ_SCAN_TIME_US 200
+#define ADJ_SCAN_TIME_US 5000
 void adj_task(void){
     static uint8_t tior; 
     static absolute_time_t adj_timer;
@@ -89,22 +89,21 @@ void adj_task(void){
             if(adj_scan_requested){
                 adj_scan_requested = false;
                 adj_state = ADJ_SCAN;
-                api_return_released();
-                adj_timer = delayed_by_us(get_absolute_time(), ADJ_SCAN_TIME_US);
+                adj_timer = delayed_by_us(get_absolute_time(), ADJ_SCAN_TIME_US*20);
                 tior = 0;
-                adj_io_read_delay(tior);
                 xram[0xFFF0] = 0x80 | tior;     //Flag scanning by setting MSB
+                api_return_released();
+                adj_io_read_delay(tior);
             }
             break;
         case(ADJ_SCAN):
             if(absolute_time_diff_us(get_absolute_time(), adj_timer) < 0){
-                if(tior > 31){
+                if(++tior > 31){
                     adj_state = ADJ_CLEANUP;
                 }else{
                     adj_timer = delayed_by_us(get_absolute_time(), ADJ_SCAN_TIME_US);
                     adj_io_read_delay(tior);
                     xram[0xFFF0] = 0x80 | tior;
-                    tior++;
                 }
             }
             break;
