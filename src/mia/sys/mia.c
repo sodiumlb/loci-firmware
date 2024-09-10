@@ -29,7 +29,7 @@
 #define MIA_WATCHDOG_MS 250
 
 //volatile uint8_t mia_iopage_enable_map[64] __attribute__((aligned(64)));
-static uint64_t mia_iopage_enable_map;
+static uint32_t mia_iopage_enable_map[2];
 
 static enum state {
     action_state_idle = 0,
@@ -40,6 +40,7 @@ static enum state {
 static absolute_time_t action_watchdog_timer;
 static volatile int32_t action_result = -1;
 static int32_t saved_reset_vec = -1;
+static int32_t saved_brk_vec = -1;
 static uint16_t rw_addr;
 static volatile int32_t rw_pos;
 static volatile int32_t rw_end;
@@ -125,7 +126,9 @@ void mia_run(void)
     
     action_result = -1;
     saved_reset_vec = XRAMW(0xFFFC);
+    saved_brk_vec   = XRAMW(0xFFFE);
     XRAMW(0xFFFC) = 0x03B0;
+    XRAMW(0xFFFE) = 0x03B0;
     action_watchdog_timer = delayed_by_us(get_absolute_time(),
                                           cpu_get_reset_us() +
                                               MIA_WATCHDOG_MS * 1000);
@@ -138,22 +141,21 @@ void mia_run(void)
         // FFF5  80 F9     BRA $FFF0
         // FFF7  80 FE     BRA $FFF7
         //Oric mod: CLV + BVC to get BRA 
-        // 03B0  B8        CLV
+        // 03B0  78        SEI
         // 03B1  A9 00     LDA #$00
         // 03B3  8D 00 00  STA $0000
-        // 03B6  50 F9     BVC $03B1
-        // 03B8  50 FE     BVC $03B8
+        // 03B6  B8        CLV
+        // 03B7  50 F8     BVC $03B0
         //mia_set_watch_address(0xFFF6);
-        IOREGS(0x03B0) = 0xB8;
+        IOREGS(0x03B0) = 0x78;
         IOREGS(0x03B1) = 0xA9;
         IOREGS(0x03B2) = mbuf[0];
         IOREGS(0x03B3) = 0x8D;
         IOREGS(0x03B4) = rw_addr & 0xFF;
         IOREGS(0x03B5) = rw_addr >> 8;
-        IOREGS(0x03B6) = 0x50;
-        IOREGS(0x03B7) = 0xF9;
-        IOREGS(0x03B8) = 0x50;
-        IOREGS(0x03B9) = 0xFE;
+        IOREGS(0x03B6) = 0xB8;
+        IOREGS(0x03B7) = 0x50;
+        IOREGS(0x03B8) = 0xF8;
         break;
     case action_state_read:
     case action_state_verify:
@@ -162,19 +164,21 @@ void mia_run(void)
         // FFF3  8D FC FF  STA $FFFC/$FFFD
         // FFF6  80 F8     BRA $FFF0
         //Oric mod: CLV + BVC to get BRA 
-        // 03B0  B8        CLV
+        // 03B0  78        SEI
         // 03B1  AD 00 00  LDA $0000
         // 03B4  8D BC 03  STA $03BC/$03BD
-        // 03B7  50 F8     BVC $03B1
-        IOREGS(0x03B0) = 0xB8;
+        // 03B7  B8        CLV
+        // 03B8  50 F7     BVC $03B0
+        IOREGS(0x03B0) = 0x78;
         IOREGS(0x03B1) = 0xAD;
         IOREGS(0x03B2) = rw_addr & 0xFF;
         IOREGS(0x03B3) = rw_addr >> 8;
         IOREGS(0x03B4) = 0x8D;
         IOREGS(0x03B5) = (action_state == action_state_verify) ? 0xBC : 0xBD;
         IOREGS(0x03B6) = 0x03;
-        IOREGS(0x03B7) = 0x50;
-        IOREGS(0x03B8) = 0xF8;
+        IOREGS(0x03B7) = 0xB8;
+        IOREGS(0x03B8) = 0x50;
+        IOREGS(0x03B9) = 0xF7;
         break;
     default:
         break;
@@ -196,6 +200,11 @@ void mia_stop(void)
     {
         XRAMW(0xFFFC) = saved_reset_vec;
         saved_reset_vec = -1;
+    }
+    if (saved_brk_vec >= 0)
+    {
+        XRAMW(0xFFFE) = saved_brk_vec;
+        saved_brk_vec = -1;
     }
 }
 
@@ -260,11 +269,15 @@ void mia_task(void)
         if (absolute_time_diff_us(now, action_watchdog_timer) < 0)
         {
             printf("****TIMEOUT****\n");
+            printf("%02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+            IOREGS(0x03B0),IOREGS(0x03B1),IOREGS(0x03B2),IOREGS(0x03B3),
+            IOREGS(0x03B4),IOREGS(0x03B5),IOREGS(0x03B6),IOREGS(0x03B7),
+            IOREGS(0x03B8));
+            printf("%d-%d %s\n", rw_pos, rw_end, action_state == action_state_read ? "R" : "N");
             action_result = -3;
             main_stop();
         }
     }
-    IOREGS(0x031B) = oric_bank1[IOREGS(0x31A)];
     switch(mia_state){
         case MIA_LOADING_DEVROM:
             if(!rom_active()){
@@ -484,12 +497,17 @@ inline void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
 }
 
+static inline uint32_t wait_act_data(void){
+    while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
+    return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
+}
+
 int mia_read_dma_channel;
 
 //#define CASE_READ(addr) (addr & 0x1F)
 //#define CASE_WRITE(addr) (0x20 | (addr & 0x1F))
-#define CASE_READ(addr) (addr & 0x0000FFFF)
-#define CASE_WRITE(addr) (0x01000000 | (addr & 0x0000FFFF))
+#define CASE_READ(addr) (addr & 0x000000FF)
+#define CASE_WRITE(addr) (0x01000000 | (addr & 0x000000FF))
 #define MIA_RW0 IOREGS(0x03A4)
 #define MIA_STEP0 *(int8_t *)&IOREGS(0x03A5)
 #define MIA_ADDR0 IOREGSW(0x03A6)
@@ -498,289 +516,283 @@ int mia_read_dma_channel;
 #define MIA_ADDR1 IOREGSW(0x03AA)
 static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
 {
-    printf("act_loop started\n");
-    
     // In here we bypass the usual SDK calls as needed for performance.
     while (true)
     {
         if (!(MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM))))
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
-            (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
-        
+
             //Track errors and stop processing if address is wrong (0x03xx)
             if((rw_data_addr & 0x0000FF00) != 0x00000300){
                 mia_io_errors++;
                 continue;
             }
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
-                if((mia_iopage_enable_map >> ((rw_data_addr & 0x000000FC) >> 2)) & 0x1ULL)
+                if((mia_iopage_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F))){
+                    (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
+                    //(&dma_hw->ch[data_chan])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                     MIA_IO_READ_PIO->irq = 1u << 5;
-            }else{  //Write - Saves having dedicated write PIO program
-                IOREGS(rw_data_addr & 0xFF) = (rw_data_addr >> 16) & 0xFF;
+                }
             }
-          
-            if (true)//((1u << CPU_RESB_PIN) & sio_hw->gpio_in))
-            {
-                uint32_t data = (rw_data_addr >> 16) & 0xFF;
-                switch (rw_data_addr & 0x0100FFFF)
-                {
-                case CASE_WRITE(0x300):
-                    tap_act(data);              //Motor sense
-                    break;
-                case CASE_READ(TAP_IO_STAT):
-                case CASE_WRITE(TAP_IO_CMD):
-                case CASE_READ(TAP_IO_DATA):
-                case CASE_WRITE(TAP_IO_DATA):
-                    //printf(" %08x   \n", rw_data_addr);
-                    //tap_act();
-                    break;
-                //RW_DATA segment at xram 0x4000 aka oric_bank1
-                case CASE_WRITE(0x31A): //ADDR
-                    //IOREGS(0x031B) = 0x08;
-                    //break;     
-                   __attribute__((fallthrough));
-                case CASE_READ(0x031B): //RW_DATA
-                    IOREGS(0x031B) = oric_bank1[IOREGS(0x31A)]; 
-                    break;
-                case CASE_WRITE(0x031B): //RW_DATA
-                    oric_bank1[IOREGS(0x31A)] = data;
-                    break;
-                //ACIA Device Registers 0x380-0x383
-                case CASE_READ(ACIA_IO_DATA):
-                    acia_read();
-                    break;
-                case CASE_WRITE(ACIA_IO_DATA):
-                    acia_write(data);
-                    break;
-                case CASE_READ(ACIA_IO_STAT):
-                    acia_clr_irq();
-                    break;
-                case CASE_WRITE(ACIA_IO_STAT):
-                    acia_reset(false);
-                    break;
-                case CASE_WRITE(ACIA_IO_CMD):
-                    acia_cmd(data);
-                    break;
-                case CASE_WRITE(ACIA_IO_CTRL):
-                    acia_ctrl(data);
-                    break;
-                //Microdisc Device Register
-                case CASE_READ(DSK_IO_CMD):
-                    dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
-                    IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
-                    break;                    
-                case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
-                    dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
-                    IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
-                    dsk_act(data);              //Process command
-                    break;
-                case CASE_READ(DSK_IO_DATA):
-                    dsk_reg_status &= 0b11111101;
-                    IOREGS(DSK_IO_CMD) = dsk_reg_status;
-                    IOREGS(DSK_IO_DRQ) = 0x80;
-                    dsk_rw(false,0x00);
-                    break;
-                case CASE_WRITE(DSK_IO_DATA):
-                    dsk_reg_status &= 0b11111101;
-                    IOREGS(DSK_IO_CMD) = dsk_reg_status;
-                    IOREGS(DSK_IO_DRQ) = 0x80;
-                    dsk_rw(true, data);
-                    //ssd_got_action_word = true;
-                    //ssd_action_word = rw_data_addr;
-                    break;
-                case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
-                    //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
-                    //[7] 0:device rom enabled
-                    //[1] 0:basic rom disabled
-                    mia_set_rom_ram_enable(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
-                    dsk_set_ctrl(data); //Handling of DSK related bits
-                    IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
-                    //ssd_got_action_word = true;
-                    //ssd_action_word = rw_data_addr;
-                    break;
-                case CASE_READ(DSK_IO_DRQ):
-                    //ssd_got_action_word = true;
-                    //ssd_action_word = rw_data_addr;
-                    break;
-
-                //RP6502-like interface
-                case CASE_READ(0x03B7): // action write
-                    if (rw_pos < rw_end)
-                    {
-                        if (rw_pos > 0)
+            /*
+                Writes are served by a second FIFO word from the PIO program when data is valid.
+                For needed performance we wait for that message after we have decoded the address within each write case.
+                Any write case that needs both special handling and storing of the data needs to explicitly store the data
+                within the case section.
+            */
+            
+            uint32_t data;
+                switch(rw_data_addr & 0x010000FF){
+                    //TAP Motor sense (snooping VIA writes)
+                    case CASE_WRITE(0x300):
+                        data = wait_act_data();
+                        tap_act(data);              
+                        break;
+                    //Microdisc Device Write Registers
+                    case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
+                        data = wait_act_data();
+                        dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
+                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
+                        dsk_act(data);              //Process command
+                        break;
+                    case CASE_WRITE(DSK_IO_DATA):
+                        data = wait_act_data();
+                        dsk_reg_status &= 0b11111101;
+                        IOREGS(DSK_IO_DATA) = data;
+                        IOREGS(DSK_IO_CMD) = dsk_reg_status;
+                        IOREGS(DSK_IO_DRQ) = 0x80;
+                        dsk_rw(true, data);
+                        break;
+                    case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
+                        data = wait_act_data();
+                        //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
+                        //[7] 0:device rom enabled
+                        //[1] 0:basic rom disabled
+                        mia_set_rom_ram_enable(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
+                        dsk_set_ctrl(data); //Handling of DSK related bits
+                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
+                        break;
+                    //ACIA Device Write Registers 0x380-0x383
+                    case CASE_WRITE(ACIA_IO_DATA):
+                        data = wait_act_data();
+                        acia_write(data);
+                        break;
+                    case CASE_WRITE(ACIA_IO_STAT):
+                        data = wait_act_data();
+                        acia_reset(false);
+                        break;
+                    case CASE_WRITE(ACIA_IO_CMD):
+                        data = wait_act_data();
+                        acia_cmd(data);
+                        break;
+                    case CASE_WRITE(ACIA_IO_CTRL):
+                        data = wait_act_data();
+                        acia_ctrl(data);
+                        break;
+                    //RP6502-like API interface write registers
+                    case CASE_WRITE(0x03AF): // OS function call
+                        data = wait_act_data();
+                        IOREGS(0x03AF) = data;
+                        api_return_blocked();
+                        if (data == 0x00) // zxstack()
                         {
-                            IOREGS(0x03B2) = mbuf[rw_pos];
-                            IOREGSW(0x03B4) += 1;
+                            API_STACK = 0;
+                            xstack_ptr = XSTACK_SIZE;
+                            api_return_ax(0);
                         }
-                        if (++rw_pos == rw_end)
-                            IOREGS(0x03B7) = 0x00;
-                    }
-                    else if(action_state == action_state_write)
-                    {
-                        //TODO proper handling on Oric
-                        //gpio_put(CPU_RESB_PIN, false);
-                        reset_requested = true;
-                        action_result = -2;
-                        main_stop();
-                    }
-                    break;
-                case CASE_WRITE(0x03BD): // action read
-                    if (rw_pos < rw_end)
-                    {
-                        IOREGSW(0x03B2) += 1;
+                        else if (data == 0xFF) // exit()
+                        {
+                            reset_requested = true;
+                            main_stop();
+                        }
+                        break;
+                    case CASE_WRITE(0x03AC): // xstack
+                        data = wait_act_data();
+                        if (xstack_ptr)
+                            xstack[--xstack_ptr] = data;
+                        API_STACK = xstack[xstack_ptr];
+                        break;
+                    case CASE_WRITE(0x03AB): // Set XRAM >ADDR1
+                        data = wait_act_data();
+                        IOREGS(0x03AB) = data;
+                        MIA_RW1 = xram[MIA_ADDR1];
+                        break;
+                    case CASE_WRITE(0x03AA): // Set XRAM <ADDR1
+                        data = wait_act_data();
+                        IOREGS(0x03AA) = data;
+                        MIA_RW1 = xram[MIA_ADDR1];
+                        break;
+                    case CASE_WRITE(0x03A8): // W XRAM1
+                        data = wait_act_data();
+                        xram[MIA_ADDR1] = data;
+                        //PIX_SEND_XRAM(RIA_ADDR1, data);
+                        MIA_RW0 = xram[MIA_ADDR0];
+                        MIA_ADDR1 += MIA_STEP1;
+                        MIA_RW1 = xram[MIA_ADDR1];
+                        break;
+                    case CASE_WRITE(0x03A7): // Set XRAM >ADDR0
+                        data = wait_act_data();
+                        IOREGS(0x03A7) = data;
+                        MIA_RW0 = xram[MIA_ADDR0];
+                        break;
+                    case CASE_WRITE(0x03A6): // Set XRAM <ADDR0
+                        data = wait_act_data();
+                        IOREGS(0x03A6) = data;
+                        MIA_RW0 = xram[MIA_ADDR0];
+                        break;
+                    case CASE_WRITE(0x03A4): // W XRAM0
+                        data = wait_act_data();
+                        xram[MIA_ADDR0] = data;
+                        //PIX_SEND_XRAM(RIA_ADDR0, data);
+                        MIA_RW1 = xram[MIA_ADDR1];
+                        MIA_ADDR0 += MIA_STEP0;
+                        MIA_RW0 = xram[MIA_ADDR0];
+                        break;
+                    case CASE_WRITE(0x03A1): // UART Tx
+                        data = wait_act_data();
+                        if (com_tx_writable())
+                            com_tx_write(data);
+                        if (com_tx_writable())
+                            IOREGS(0x03A0) |= 0b10000000;
+                        else
+                            IOREGS(0x03A0) &= ~0b10000000;
+                        break;
+                    case CASE_WRITE(0x03BD): // action read
+                        data = wait_act_data();
                         mbuf[rw_pos] = data;
-                        if (++rw_pos == rw_end)
-                        {
-                            //TODO proper handling on Oric
-                            //gpio_put(CPU_RESB_PIN, false);
+                        if (++rw_pos >= rw_end){
+                            IOREGS(0x03B9) = 0xFE;
                             reset_requested = true;
                             action_result = -2;
                             main_stop();
+                        }else{
+                            IOREGSW(0x03B2) = ++rw_addr;
                         }
-                    }
-                    break;
-                case CASE_WRITE(0x03BC): // action verify
-                    if (rw_pos < rw_end)
-                    {
-                        IOREGSW(0x03B2) += 1;
+                        break;
+                    case CASE_WRITE(0x03BC): // action verify
+                        data = wait_act_data();
                         if (mbuf[rw_pos] != data && action_result < 0)
-                            action_result = IOREGSW(0x0382) - 1;
-                        if (++rw_pos == rw_end)
-                        {
-                            //TODO proper handling on Oric
-                            //gpio_put(CPU_RESB_PIN, false);
+                            action_result = rw_addr;
+                        if (++rw_pos >= rw_end){
+                            IOREGS(0x03B9) = 0xFE;
                             reset_requested = true;
                             action_result = -2;
                             main_stop();
+                        }else{
+                            IOREGSW(0x03B2) = ++rw_addr;
                         }
-                    }
-                    break;
-                case CASE_WRITE(0x03B0): // IRQ Enable
-                    irq_enabled = data;
-                    __attribute__((fallthrough));
-                case CASE_READ(0x03B0): // IRQ ACK
-                    //gpio_put(CPU_IRQB_PIN, true);
-                    break;
-                case CASE_WRITE(0x03AF): // OS function call
-                    api_return_blocked();
-                    if (data == 0x00) // zxstack()
+                        break;
+                    
+                    //Microdisc Device Read Register
+                    case CASE_READ(DSK_IO_CMD):
+                        dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
+                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
+                        break;                    
+                    case CASE_READ(DSK_IO_DATA):
+                        dsk_reg_status &= 0b11111101;
+                        IOREGS(DSK_IO_CMD) = dsk_reg_status;
+                        IOREGS(DSK_IO_DRQ) = 0x80;
+                        dsk_rw(false,0x00);
+                        break;
+                    case CASE_READ(DSK_IO_DRQ):
+                        break;
+                    //ACIA Device Read Registers 0x380-0x383
+                    case CASE_READ(ACIA_IO_DATA):
+                        acia_read();
+                        break;
+                    case CASE_READ(ACIA_IO_STAT):
+                        acia_clr_irq();
+                        break;
+                    case CASE_READ(0x03AC): // xstack
+                        if (xstack_ptr < XSTACK_SIZE)
+                            ++xstack_ptr;
+                        API_STACK = xstack[xstack_ptr];
+                        break;
+                    case CASE_READ(0x03A8): // R XRAM1
+                        MIA_ADDR1 += MIA_STEP1;
+                        MIA_RW1 = xram[MIA_ADDR1];
+                        break;
+                    case CASE_READ(0x03A4): // R XRAM0
+                        MIA_ADDR0 += MIA_STEP0;
+                        MIA_RW0 = xram[MIA_ADDR0];
+                        break;
+                    case CASE_READ(0x03A2): // UART Rx
                     {
-                        API_STACK = 0;
-                        xstack_ptr = XSTACK_SIZE;
-                        api_return_ax(0);
+                        int ch = cpu_rx_char;
+                        if (ch >= 0)
+                        {
+                            IOREGS(0x03A2) = ch;
+                            IOREGS(0x03A0) |= 0b01000000;
+                            cpu_rx_char = -1;
+                        }
+                        else
+                        {
+                            IOREGS(0x03AE0) &= ~0b01000000;
+                            IOREGS(0x03AE2) = 0;
+                        }
+                        break;
                     }
-                    else if (data == 0xFF) // exit()
+                    case CASE_READ(0x03A0): // UART Tx/Rx flow control
                     {
-                        //TODO proper handling on Oric
-                        //gpio_put(CPU_RESB_PIN, false);
-                        reset_requested = true;
-                        main_stop();
+                        int ch = cpu_rx_char;
+                        if (!(IOREGS(0x03A0) & 0b01000000) && ch >= 0)
+                        {
+                            IOREGS(0x03A2) = ch;
+                            IOREGS(0x03A0) |= 0b01000000;
+                            cpu_rx_char = -1;
+                        }
+                        if (com_tx_writable())
+                            IOREGS(0x03A0) |= 0b10000000;
+                        else
+                            IOREGS(0x03A0) &= ~0b10000000;
+                        break;
                     }
-                    break;
-                case CASE_WRITE(0x03AC): // xstack
-                    if (xstack_ptr)
-                        xstack[--xstack_ptr] = data;
-                    API_STACK = xstack[xstack_ptr];
-                    break;
-                case CASE_READ(0x03AC): // xstack
-                    if (xstack_ptr < XSTACK_SIZE)
-                        ++xstack_ptr;
-                    API_STACK = xstack[xstack_ptr];
-                    break;
-                case CASE_WRITE(0x03AB): // Set XRAM >ADDR1
-                    IOREGS(0x03AB) = data;
-                    MIA_RW1 = xram[MIA_ADDR1];
-                    break;
-                case CASE_WRITE(0x03AA): // Set XRAM <ADDR1
-                    IOREGS(0x03AA) = data;
-                    MIA_RW1 = xram[MIA_ADDR1];
-                    break;
-                case CASE_WRITE(0x03A8): // W XRAM1
-                    xram[MIA_ADDR1] = data;
-                    //PIX_SEND_XRAM(RIA_ADDR1, data);
-                    MIA_RW0 = xram[MIA_ADDR0];
-                    __attribute__((fallthrough));
-                case CASE_READ(0x03A8): // R XRAM1
-                    MIA_ADDR1 += MIA_STEP1;
-                    MIA_RW1 = xram[MIA_ADDR1];
-                    break;
-                case CASE_WRITE(0x03A7): // Set XRAM >ADDR0
-                    IOREGS(0x03A7) = data;
-                    MIA_RW0 = xram[MIA_ADDR0];
-                    break;
-                case CASE_WRITE(0x03A6): // Set XRAM <ADDR0
-                    IOREGS(0x03A6) = data;
-                    MIA_RW0 = xram[MIA_ADDR0];
-                    break;
-                case CASE_WRITE(0x03A4): // W XRAM0
-                    xram[MIA_ADDR0] = data;
-                    //PIX_SEND_XRAM(RIA_ADDR0, data);
-                    MIA_RW1 = xram[MIA_ADDR1];
-                    __attribute__((fallthrough));
-                case CASE_READ(0x03A4): // R XRAM0
-                    MIA_ADDR0 += MIA_STEP0;
-                    MIA_RW0 = xram[MIA_ADDR0];
-                    break;
-                case CASE_READ(0x03A2): // UART Rx
-                {
-                    int ch = cpu_rx_char;
-                    if (ch >= 0)
-                    {
-                        IOREGS(0x03A2) = ch;
-                        IOREGS(0x03A0) |= 0b01000000;
-                        cpu_rx_char = -1;
-                    }
-                    else
-                    {
-                        IOREGS(0x03AE0) &= ~0b01000000;
-                        IOREGS(0x03AE2) = 0;
-                    }
-                    break;
-                }
-                case CASE_WRITE(0x03A1): // UART Tx
-                    if (com_tx_writable())
-                        com_tx_write(data);
-                    if (com_tx_writable())
-                        IOREGS(0x03A0) |= 0b10000000;
-                    else
-                        IOREGS(0x03A0) &= ~0b10000000;
-                    break;
-                case CASE_READ(0x03A0): // UART Tx/Rx flow control
-                {
-                    int ch = cpu_rx_char;
-                    if (!(IOREGS(0x03A0) & 0b01000000) && ch >= 0)
-                    {
-                        IOREGS(0x03A2) = ch;
-                        IOREGS(0x03A0) |= 0b01000000;
-                        cpu_rx_char = -1;
-                    }
-                    if (com_tx_writable())
-                        IOREGS(0x03A0) |= 0b10000000;
-                    else
-                        IOREGS(0x03A0) &= ~0b10000000;
-                    break;
-                }
-    
-                }
+                    //RP6502-like API interface read registers
+                    case CASE_READ(0x03B6): // action write
+                        if(action_state == action_state_write){
+                            if (++rw_pos >= rw_end){
+                                IOREGS(0x03B8) = 0xFE;
+                                reset_requested = true;
+                                action_result = -2;
+                                main_stop();
+                            }else{
+                                IOREGS(0x03B2) = mbuf[rw_pos];
+                                IOREGSW(0x03B4) = ++rw_addr;
+                            }
+                        }
+                        break;
+                    default:
+                        //Default register write handling
+                        if(rw_data_addr & 0x01000000)
+                            IOREGS(rw_data_addr & 0xFFFF) = wait_act_data();
+                        break;
+            }
+                        /*
+                        case CASE_WRITE(0x03B0): // IRQ Enable
+                            irq_enabled = data;
+                            __attribute__((fallthrough));
+                        case CASE_READ(0x03B0): // IRQ ACK
+                            //gpio_put(CPU_IRQB_PIN, true);
+                            break;
+                        */
+
             /*
                 if((rw_data_addr & 0x0000FFF0) == 0x000003B0){
-                    //ssd_got_action_word = true;
+                    ssd_got_action_word = true;
                     if(rw_data_addr >> 24){
                         ssd_action_word = rw_data_addr;
                         ssd_action_is_wr = true;
                     }else{
-                        //static uint8_t cnt = 0;
-                        //ssd_action_rword = rw_data_addr | (cnt++ <<16);
-                        ssd_action_rword = (rw_data_addr & 0xFF00FFFF) | (IOREGS(rw_data_addr & 0xFFFF) << 16);
+                        static uint8_t cnt = 0;
+                        ssd_action_rword = rw_data_addr | (cnt++ <<16);
+                        //ssd_action_rword = (rw_data_addr & 0xFF00FFFF) | (IOREGS(rw_data_addr & 0xFFFF) << 16);
                         ssd_action_is_wr = false;
                     }
                 }
             */
-            }
-        }
-            
-    }
+        } /* if fifo */        
+    } /* while loop */
 }
 
 static void mia_write_pio_init(void)
@@ -1032,9 +1044,9 @@ static void mia_io_read_pio_init(void)
     pio_sm_set_consecutive_pindirs(MIA_IO_READ_PIO, MIA_IO_READ_SM, DIR_PIN, 1, true);
     //pio_sm_set_consecutive_pindirs(MIA_WRITE_PIO, MIA_WRITE_SM, CPU_PHI2_PIN, 1, true);
     pio_sm_init(MIA_IO_READ_PIO, MIA_IO_READ_SM, offset, &config);
-    pio_sm_put(MIA_IO_READ_PIO, MIA_IO_READ_SM, (uintptr_t)mia_iopage_enable_map >> 6);
-    pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_pull(false, true));
-    pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_mov(pio_x, pio_osr));
+    //pio_sm_put(MIA_IO_READ_PIO, MIA_IO_READ_SM, (uintptr_t)mia_iopage_enable_map >> 6);
+    //pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_pull(false, true));
+    //pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_mov(pio_x, pio_osr));
     pio_sm_set_enabled(MIA_IO_READ_PIO, MIA_IO_READ_SM, true);
 
     // Need both channels now to configure chain ping-pong
@@ -1177,6 +1189,8 @@ void mia_init(void)
 
     pio_gpio_init(MIA_READ_PIO, DIR_PIN);
     pio_gpio_init(MIA_MAP_PIO, MAP_PIN);
+    gpio_set_drive_strength(DIR_PIN, GPIO_DRIVE_STRENGTH_2MA);
+    gpio_set_drive_strength(MAP_PIN, GPIO_DRIVE_STRENGTH_2MA);
     
     //Invert RnW signal to nRW to save some PIO cycles
     gpio_set_inover(RnW_PIN, GPIO_OVERRIDE_INVERT);
@@ -1205,18 +1219,19 @@ void mia_init(void)
         mia_iopage_enable_map[i] = 0xff;
     }
     */
-   mia_iopage_enable_map = 0x00;
+   mia_iopage_enable_map[0] = 0;
+   mia_iopage_enable_map[1] = 0;
     //Enable response on IO registers 0x310-0x31B (DSK/TAP)
     for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
-        mia_iopage_enable_map |= (0x1ULL << i);
+        mia_iopage_enable_map[0] |= (0x1UL << (i & 0x1F));
     }
     //Enable response on IO registers 0x380-0x383 (ACIA)
     for(int i=(0x80 >> 2); i<=(0x83 >> 2); i++){
-        mia_iopage_enable_map |= (0x1ULL << i);
+        mia_iopage_enable_map[1] |= (0x1UL << (i & 0x1F));
     }
     //Enable response on IO registers 0x3A0-0x3BF (LOCI)
     for(int i=(0xA0 >> 2); i<=(0xBF >> 2); i++){
-        mia_iopage_enable_map |= (0x1ULL << i);
+        mia_iopage_enable_map[1] |= (0x1UL << (i & 0x1F));
     }
    
     mia_boot_settings = 0;
