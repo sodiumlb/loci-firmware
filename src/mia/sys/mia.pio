@@ -19,13 +19,13 @@ start:
     out null 8           ;Spool out A[7:0]
     out x 8              ;Get page address A[15:8]
     jmp x!=y start
-    jmp pin iswrite      ;Handle writes later
     in pins 25           ;Get RnW,D[7:0]:A[15:0] (autopush) read - data ignored in action loop
+    jmp pin iswrite      ;Handle writes later
     jmp start            ;
 iswrite:                 ;Writes needs data to be stable (phi2 high)
     wait 1 gpio 25  [20] ;Delay needed for stable data sampling 
     nop             [0]  ;<- act write timing adjust 0-31
-    in pins 25      [15] ;Get RnW,D[7:0]:A[15:0] (autopush)
+    in pins 25      [0] ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
 ; Async ROM and IO data read emulation
@@ -48,9 +48,9 @@ isrom:
     pull noblock         [7]
     ;mov x osr
     out x 32             [7] ;same as <mov x osr> but clears osr for later use as zero
-    wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
+    wait 0 gpio 25       [2] ;wait for phi2 falling edge + A setup-time
     out pindirs 8            ;disable data output
-    set pins 1           [6]
+    set pins 1          [11]
     mov isr x           [14] ; ROM page cortex base address
     nop                  [0] ;<- read addr timing adjust 0-14 (0-7 + 0-7)
     jmp pin isrom            ; Test A[15] 0=IO 1=ROM
@@ -76,7 +76,7 @@ start:
 
 .wrap_target
 start:
-    wait 0 gpio 25      [7]  ;wait for phi2 falling edge
+    wait 0 gpio 25     [31]  ;wait for phi2 falling edge
     wait 1 gpio 25      [6]  ;wait for phi2 raising edge
     jmp pin start            ;RnW inverted. Pass on Read
     mov osr pins
@@ -96,7 +96,7 @@ start:
 .program mia_map
 
 start:
-    wait 1 gpio 25     [31]
+    wait 1 gpio 25     [10]
 .wrap_target
     wait 0 gpio 25     [31]  ;wait for phi2 falling edge + A setup-time
     mov osr pins             ;ca 70 cycles delay before setting MAP
