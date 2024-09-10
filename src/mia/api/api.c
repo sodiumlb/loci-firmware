@@ -33,10 +33,10 @@ void api_run(void)
     for (int i = 0; i < 16; i++)
         if (i != 3) // Skip VSYNC
             REGS(i) = 0;
-    *(int8_t *)&REGS(0xFFE5) = 1; // STEP0
-    REGS(0xFFE4) = xram[0];       // RW0
-    *(int8_t *)&REGS(0xFFE9) = 1; // STEP1
-    REGS(0xFFE8) = xram[0];       // RW1
+    *(int8_t *)&IOREGS(0x03A5) = 1; // STEP0
+    IOREGS(0x03A4) = xram[0];       // RW0
+    *(int8_t *)&IOREGS(0x03A9) = 1; // STEP1
+    IOREGS(0x03A8) = xram[0];       // RW1
     api_return_errno(0);
 }
 
