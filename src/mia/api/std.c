@@ -11,15 +11,23 @@
 //#include "sys/pix.h"
 #include "hardware/pio.h"
 #include "fatfs/ff.h"
+#include "sys/lfs.h"
+#include "hardware/flash.h"
 #include <stdio.h>
 
 #define STD_FIL_MAX 16
 FIL std_fil[STD_FIL_MAX];
+#define STD_LFS_MAX 2
+bool lfs_isopen[STD_LFS_MAX] = {false};
+lfs_file_t lfs_fil[STD_LFS_MAX];
+uint8_t lfs_config_buf[STD_LFS_MAX][FLASH_PAGE_SIZE];
+struct lfs_file_config lfs_configs[STD_LFS_MAX];
 #define STD_FIL_STDIN 0
 #define STD_FIL_STDOUT 1
 #define STD_FIL_STDERR 2
 #define STD_FIL_OFFS 3
-static_assert(STD_FIL_MAX + STD_FIL_OFFS < 128);
+#define STD_LFS_OFFS (STD_FIL_OFFS+STD_FIL_MAX)
+static_assert(STD_LFS_MAX + STD_LFS_OFFS < 128);
 
 static int32_t std_xram_count = -1;
 static int32_t std_in_count = -1;
@@ -65,46 +73,88 @@ void std_api_open(void)
     const unsigned char EXCL = 0x80;
 
     uint8_t flags = API_A;
-    uint8_t mode = flags & RDWR; // RDWR are same bits
-    if (flags & CREAT)
-    {
-        if (flags & EXCL)
-            mode |= FA_CREATE_NEW;
-        else
-        {
-            if (flags & TRUNC)
-                mode |= FA_CREATE_ALWAYS;
-            else if (flags & APPEND)
-                mode |= FA_OPEN_APPEND;
-            else
-                mode |= FA_OPEN_ALWAYS;
-        }
-    }
+    uint16_t mode = flags & RDWR; // RDWR are same bits
     uint8_t *path = &xstack[xstack_ptr];
     api_zxstack();
-    int fd = 0;
-    for (; fd < STD_FIL_MAX; fd++)
-        if (!std_fil[fd].obj.fs)
-            break;
-    if (fd == STD_FIL_MAX)
-        return api_return_errno(API_EMFILE);
-    FIL *fp = &std_fil[fd];
-    FRESULT fresult = f_open(fp, (TCHAR *)path, mode);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
-    return api_return_ax(fd + STD_FIL_OFFS);
+    if(path[0]=='0' && path[1]==':'){   //Internal flash at 0:
+        path = &path[2];
+        if (flags & CREAT)
+        {
+            if (flags & EXCL)
+                mode |= LFS_O_EXCL;
+            else
+            {
+                if (flags & TRUNC)
+                    mode |= LFS_O_TRUNC;
+                else if (flags & APPEND)
+                    mode |= LFS_O_APPEND;
+                else
+                    mode |= LFS_O_CREAT;
+            }
+        }
+
+        int fd = 0;
+        for(; fd < STD_LFS_MAX; fd++)
+            if (!lfs_isopen[fd])
+                break;
+        if (fd == STD_LFS_MAX)
+            return api_return_errno(API_EMFILE);
+        lfs_file_t *fp = &lfs_fil[fd];
+        lfs_configs[fd].buffer = lfs_config_buf[fd];
+        int lfsresult = lfs_file_opencfg(&lfs_volume, fp, (char*)path, mode, &lfs_configs[fd]);
+        if(lfsresult < 0)
+            return (api_return_errno(API_ELFSFS(lfsresult)));
+        lfs_isopen[fd] = true;
+        return api_return_ax(fd + STD_LFS_OFFS);
+    }else{
+        if (flags & CREAT)
+        {
+            if (flags & EXCL)
+                mode |= FA_CREATE_NEW;
+            else
+            {
+                if (flags & TRUNC)
+                    mode |= FA_CREATE_ALWAYS;
+                else if (flags & APPEND)
+                    mode |= FA_OPEN_APPEND;
+                else
+                    mode |= FA_OPEN_ALWAYS;
+            }
+        }
+
+        int fd = 0;
+        for (; fd < STD_FIL_MAX; fd++)
+            if (!std_fil[fd].obj.fs)
+                break;
+        if (fd == STD_FIL_MAX)
+            return api_return_errno(API_EMFILE);
+        FIL *fp = &std_fil[fd];
+        FRESULT fresult = f_open(fp, (TCHAR *)path, mode);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+        return api_return_ax(fd + STD_FIL_OFFS);
+    }
 }
 
 void std_api_close(void)
 {
     int fd = API_A;
-    if (fd < STD_FIL_OFFS || fd >= STD_FIL_MAX + STD_FIL_OFFS)
+    if (fd < STD_FIL_OFFS || fd >= STD_LFS_MAX + STD_LFS_OFFS)
         return api_return_errno(API_EINVAL);
-    FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-    FRESULT fresult = f_close(fp);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
-    return api_return_ax(0);
+    if (fd >= STD_LFS_OFFS){
+        lfs_file_t *fp = &lfs_fil[fd-STD_LFS_OFFS];
+        int lfsresult = lfs_file_close(&lfs_volume, fp);
+        if (lfsresult < 0)
+            return api_return_ax(API_ELFSFS(lfsresult));
+        lfs_isopen[fd-STD_LFS_OFFS] = false;
+        return api_return_ax(0);
+    }else{
+        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+        FRESULT fresult = f_close(fp);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+        return api_return_ax(0);
+    }
 }
 
 void std_api_read_xstack(void)
@@ -126,7 +176,7 @@ void std_api_read_xstack(void)
         int16_t fd = API_A;
         if (!api_pop_uint16_end(&count) ||
             (fd && fd < STD_FIL_OFFS) ||
-            fd >= STD_FIL_MAX + STD_FIL_OFFS ||
+            fd >= STD_LFS_MAX + STD_LFS_OFFS ||
             count > 0x100)
             return api_return_errno(API_EINVAL);
         buf = &xstack[XSTACK_SIZE - count];
@@ -136,13 +186,23 @@ void std_api_read_xstack(void)
             cpu_stdin_request();
             return;
         }
-        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-        FRESULT fresult = f_read(fp, buf, count, &br);
-        if (fresult != FR_OK)
-        {
-            API_ERRNO = fresult;
-            api_set_ax(-1);
-            return;
+        if(fd >= STD_LFS_OFFS){
+            lfs_file_t *fp = &lfs_fil[fd - STD_LFS_OFFS];
+            int lfsresult = lfs_file_read(&lfs_volume, fp, buf, count);
+            if (lfsresult < 0){
+                API_ERRNO = API_ELFSFS(lfsresult);
+                api_set_ax(-1);
+            }
+            br = lfsresult;
+        }else{
+            FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+            FRESULT fresult = f_read(fp, buf, count, &br);
+            if (fresult != FR_OK)
+            {
+                API_ERRNO = fresult;
+                api_set_ax(-1);
+                return;
+            }
         }
     }
     api_set_ax(br);
@@ -171,6 +231,7 @@ void std_api_read_xram(void)
         for (; std_xram_count
          //&& pix_ready()
          ; --std_xram_count, ++xram_addr)
+         {}
          //   pix_send(PIX_DEVICE_XRAM, 0, xram[xram_addr], xram_addr);
         if (!std_xram_count)
         {
@@ -182,10 +243,11 @@ void std_api_read_xram(void)
     uint8_t *buf;
     uint16_t count;
     int16_t fd = API_A;
+    UINT br;
     if (!api_pop_uint16(&count) ||
         !api_pop_uint16_end(&xram_addr) ||
         (fd && fd < STD_FIL_OFFS) ||
-        fd >= STD_FIL_MAX + STD_FIL_OFFS)
+        fd >= STD_LFS_MAX + STD_LFS_OFFS)
         return api_return_errno(API_EINVAL);
     if (!fd)
     {
@@ -198,17 +260,27 @@ void std_api_read_xram(void)
         count = 0x7FFF;
     if (buf + count > xram + 0x10000)
         return api_return_errno(API_EINVAL);
-    FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-    UINT br;
-    FRESULT fresult = f_read(fp, buf, count, &br);
-    if (fresult == FR_OK)
-        api_set_ax(br);
-    else
-    {
-        API_ERRNO = fresult;
-        api_set_ax(-1);
+    if( fd >= STD_LFS_OFFS){
+        lfs_file_t *fp = &lfs_fil[fd - STD_LFS_OFFS];
+        int lfsresult = lfs_file_read(&lfs_volume, fp, buf, count);
+        if (lfsresult < 0){
+            API_ERRNO = API_ELFSFS(lfsresult);
+            api_set_ax(-1);
+        }else{
+            std_xram_count = lfsresult;
+        }
+    }else{
+        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+        FRESULT fresult = f_read(fp, buf, count, &br);
+        if (fresult == FR_OK)
+            api_set_ax(br);
+        else
+        {
+            API_ERRNO = fresult;
+            api_set_ax(-1);
+        }
+        std_xram_count = br;
     }
-    std_xram_count = br;
 }
 
 // Non-blocking write
@@ -233,7 +305,7 @@ void std_api_write_xstack(void)
     uint8_t *buf;
     uint16_t count;
     int fd = API_A;
-    if (fd == STD_FIL_STDIN || fd >= STD_FIL_MAX + STD_FIL_OFFS)
+    if (fd == STD_FIL_STDIN || fd >= STD_LFS_MAX + STD_LFS_OFFS)
         return api_return_errno(API_EINVAL);
     count = XSTACK_SIZE - xstack_ptr;
     buf = &xstack[xstack_ptr];
@@ -245,12 +317,20 @@ void std_api_write_xstack(void)
         std_out_write((char *)buf);
         return;
     }
-    FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-    UINT bw;
-    FRESULT fresult = f_write(fp, buf, count, &bw);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
-    return api_return_ax(bw);
+    if (fd >= STD_LFS_OFFS){
+        lfs_file_t *fp = &lfs_fil[fd - STD_LFS_OFFS];
+        int lfsresult = lfs_file_write(&lfs_volume, fp, buf, count);
+        if(lfsresult < 0)
+            return api_return_errno(API_ELFSFS(lfsresult));
+        return api_return_ax(lfsresult);
+    }else{
+        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+        UINT bw;
+        FRESULT fresult = f_write(fp, buf, count, &bw);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+        return api_return_ax(bw);
+    }
 }
 
 void std_api_write_xram(void)
@@ -261,7 +341,7 @@ void std_api_write_xram(void)
     uint16_t xram_addr;
     uint16_t count;
     int fd = API_A;
-    if (fd == STD_FIL_STDIN || fd >= STD_FIL_MAX + STD_FIL_OFFS)
+    if (fd == STD_FIL_STDIN || fd >= STD_LFS_MAX + STD_LFS_OFFS)
         return api_return_errno(API_EINVAL);
     if (!api_pop_uint16(&count) ||
         !api_pop_uint16_end(&xram_addr))
@@ -278,12 +358,20 @@ void std_api_write_xram(void)
         std_out_write((char *)buf);
         return;
     }
-    FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-    UINT bw;
-    FRESULT fresult = f_write(fp, buf, count, &bw);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
-    return api_return_ax(bw);
+    if (fd >= STD_LFS_OFFS){
+        lfs_file_t *fp = &lfs_fil[fd - STD_LFS_OFFS];
+        int lfsresult = lfs_file_write(&lfs_volume, fp, buf, count);
+        if(lfsresult < 0)
+            return api_return_errno(API_ELFSFS(lfsresult));
+        return api_return_ax(lfsresult);
+    }else{
+        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+        UINT bw;
+        FRESULT fresult = f_write(fp, buf, count, &bw);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+        return api_return_ax(bw);
+    }
 }
 
 void std_api_lseek(void)
@@ -292,41 +380,69 @@ void std_api_lseek(void)
     int32_t ofs;
     int fd = API_A;
     if (fd < STD_FIL_OFFS ||
-        fd >= STD_FIL_MAX + STD_FIL_OFFS ||
+        fd >= STD_LFS_MAX + STD_LFS_OFFS ||
         !api_pop_int8(&whence) ||
         !api_pop_int32_end(&ofs))
         return api_return_errno(API_EINVAL);
-    FIL *fp = &std_fil[fd - STD_FIL_OFFS];
-    switch (whence) // CC65
-    {
-    case 0: // SEEK_CUR
-        ofs += f_tell(fp);
-        break;
-    case 1: // SEEK_END
-        ofs += f_size(fp);
-        break;
-    case 2: // SEEK_SET
-        break;
-    default:
-        return api_return_errno(API_EINVAL);
+    if (fd >= STD_LFS_OFFS){
+        lfs_file_t *fp = &lfs_fil[fd - STD_LFS_OFFS];
+        switch (whence)
+        {
+        case 0: // SEEK_CUR
+            whence = LFS_SEEK_CUR;
+            break;
+        case 1: // SEEK_END
+            whence = LFS_SEEK_END;
+            break;
+        case 2: // SEEK_SET
+            whence = LFS_SEEK_SET;
+            break;
+        default:
+            return api_return_errno(API_EINVAL);
+        }
+        int lfsresult = lfs_file_seek(&lfs_volume,fp,ofs,whence);
+        if (lfsresult < 0)
+            return api_return_errno(API_ELFSFS(lfsresult));
+        return api_return_axsreg(lfsresult);
+    }else{
+        FIL *fp = &std_fil[fd - STD_FIL_OFFS];
+        switch (whence) // CC65
+        {
+        case 0: // SEEK_CUR
+            ofs += f_tell(fp);
+            break;
+        case 1: // SEEK_END
+            ofs += f_size(fp);
+            break;
+        case 2: // SEEK_SET
+            break;
+        default:
+            return api_return_errno(API_EINVAL);
+        }
+        FRESULT fresult = f_lseek(fp, ofs);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+        FSIZE_t pos = f_tell(fp);
+        // Beyond 2GB is darkness.
+        if (pos > 0x7FFFFFFF)
+            pos = 0x7FFFFFFF;
+        return api_return_axsreg(pos);
     }
-    FRESULT fresult = f_lseek(fp, ofs);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
-    FSIZE_t pos = f_tell(fp);
-    // Beyond 2GB is darkness.
-    if (pos > 0x7FFFFFFF)
-        pos = 0x7FFFFFFF;
-    return api_return_axsreg(pos);
 }
 
 void std_api_unlink(void)
 {
     uint8_t *path = &xstack[xstack_ptr];
     api_zxstack();
-    FRESULT fresult = f_unlink((TCHAR *)path);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
+    if(path[0]=='0' && path[1]==':'){
+        int lfsresult = lfs_remove(&lfs_volume, (char*)path);
+        if(lfsresult < 0)
+            return api_return_errno(API_ELFSFS(lfsresult));
+    }else{
+        FRESULT fresult = f_unlink((TCHAR *)path);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+    }
     return api_return_ax(0);
 }
 
@@ -340,9 +456,20 @@ void std_api_rename(void)
     if (oldname == &xstack[XSTACK_SIZE])
         return api_return_errno(API_EINVAL);
     oldname++;
-    FRESULT fresult = f_rename((TCHAR *)oldname, (TCHAR *)newname);
-    if (fresult != FR_OK)
-        return api_return_errno(API_EFATFS(fresult));
+    if(oldname[0]=='0' && oldname[1]==':'){
+        oldname = &oldname[2];
+        if(newname[0]=='0' && newname[1]==':')
+            newname = &newname[2];
+        else
+            return api_return_errno(API_EINVAL);
+        int lfsresult = lfs_rename(&lfs_volume, (char*)oldname, (char*)newname);
+        if (lfsresult < 0)
+            return api_return_errno(API_ELFSFS(lfsresult));
+    }else{
+        FRESULT fresult = f_rename((TCHAR *)oldname, (TCHAR *)newname);
+        if (fresult != FR_OK)
+            return api_return_errno(API_EFATFS(fresult));
+    }
     return api_return_ax(0);
 }
 
@@ -353,4 +480,7 @@ void std_stop(void)
     for (int i = 0; i < STD_FIL_MAX; i++)
         if (std_fil[i].obj.fs)
             f_close(&std_fil[i]);
+    for (int i = 0; i < STD_LFS_MAX; i++)
+        if (lfs_isopen[i])
+            lfs_file_close(&lfs_volume, &lfs_fil[i]);
 }
