@@ -21,4 +21,9 @@ void mnt_stop(void);
 void mnt_api_mount(void);
 void mnt_api_umount(void);
 
+/* For use in USB handler to track lost MSC devices
+*/
+void mnt_set_lost(uint8_t device);
+void mnt_check_lost(uint8_t device);
+
 #endif /* _MNT_H_ */

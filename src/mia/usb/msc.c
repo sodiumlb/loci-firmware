@@ -10,6 +10,7 @@
 #include "usb/usb.h"
 #include "fatfs/ff.h"
 #include "fatfs/diskio.h"
+#include "api/mnt.h"
 #include <math.h>
 
 // We are an 8-bit computer, confirm fatfs is too
@@ -69,6 +70,7 @@ bool inquiry_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const *cb_dat
         f_chdir("/");
     }
     msc_inquiry_busy = false;
+    mnt_check_lost(dev_addr);
     return true;
 }
 
@@ -101,6 +103,7 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
     char drive_path[3] = "0:";
     drive_path[0] += dev_addr;
     f_unmount(drive_path);
+    mnt_set_lost(dev_addr);
 }
 
 static void wait_for_disk_io(BYTE pdrv)
