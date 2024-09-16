@@ -17,6 +17,16 @@
 FIL mnt_fd_fat[MNT_FD_MAX];
 lfs_file_t mnt_fd_lfs[MNT_FD_MAX];
 
+char mnt_paths[MNT_FD_MAX][256];
+
+typedef enum _mnt_status {
+    UNMOUNTED = 0,
+    MOUNTED,
+    LOST
+} mnt_status_t;
+
+mnt_status_t mnt_status[MNT_FD_MAX] = { 0 };
+
 //TODO Very costly buffer. Relocate?
 uint8_t mnt_lfs_buffer[MNT_FD_MAX][FLASH_PAGE_SIZE];
 struct lfs_file_config mnt_lfs_configs[MNT_FD_MAX] = {
@@ -33,11 +43,8 @@ struct lfs_file_config mnt_lfs_configs[MNT_FD_MAX] = {
 void mnt_task(void);
 void mnt_stop(void);
 
-void mnt_api_mount(void){
-    uint8_t drive = API_A;
-    char *path = (char*)&xstack[xstack_ptr];
-    api_zxstack();
-    if(drive == 4){ //Tape
+uint8_t mnt_mount(uint8_t drive, char *path){
+   if(drive == 4){ //Tape
         tap_umount();
     }else{
         dsk_umount(drive);
@@ -53,13 +60,26 @@ void mnt_api_mount(void){
     }else{              //FAT mount
         FRESULT fresult = f_open(&mnt_fd_fat[drive], path, FA_READ | FA_WRITE);
         if (fresult != FR_OK)
-            return api_return_errno(API_EFATFS(fresult));
+            return API_EFATFS(fresult);
         if(drive == 4){
             tap_mount_fat(&mnt_fd_fat[4]);
         }else{
             dsk_mount_fat(drive, &mnt_fd_fat[drive]);
         }
     }
+    mnt_status[drive] = MOUNTED;
+    return 0;
+}
+
+void mnt_api_mount(void){
+    uint8_t drive = API_A;
+    char *path = (char*)&xstack[xstack_ptr];
+    api_zxstack();
+    uint8_t ret;
+    ret = mnt_mount(drive,path);
+    if(ret > 0)
+        api_return_errno(ret);
+    strcpy(mnt_paths[drive],path);
     printf("{MNT ok %s}",path);
     return api_return_ax(0);
 }
@@ -71,5 +91,23 @@ void mnt_api_umount(void){
     }else{
         dsk_umount(drive);
     }
+    if(drive < 5)
+        mnt_status[drive] = UNMOUNTED;
     return api_return_ax(0);
+}
+
+void mnt_set_lost(uint8_t device){
+    for(int i=0; i < MNT_FD_MAX; i++){
+        if(mnt_status[i]==MOUNTED && mnt_paths[i][0]==('0'+device)){
+            mnt_status[i] = LOST;
+        }
+    }
+}
+
+void mnt_check_lost(uint8_t device){
+    for(int i=0; i < MNT_FD_MAX; i++){
+        if(mnt_status[i]==LOST && mnt_paths[i][0]==('0'+device)){
+            mnt_mount(i,mnt_paths[i]);
+        }
+    }
 }
