@@ -1189,8 +1189,8 @@ void mia_init(void)
 
     pio_gpio_init(MIA_READ_PIO, DIR_PIN);
     pio_gpio_init(MIA_MAP_PIO, MAP_PIN);
-    gpio_set_drive_strength(DIR_PIN, GPIO_DRIVE_STRENGTH_2MA);
-    gpio_set_drive_strength(MAP_PIN, GPIO_DRIVE_STRENGTH_2MA);
+    //gpio_set_drive_strength(DIR_PIN, GPIO_DRIVE_STRENGTH_2MA);
+    //gpio_set_drive_strength(MAP_PIN, GPIO_DRIVE_STRENGTH_2MA);
     
     //Invert RnW signal to nRW to save some PIO cycles
     gpio_set_inover(RnW_PIN, GPIO_OVERRIDE_INVERT);
