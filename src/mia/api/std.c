@@ -435,6 +435,7 @@ void std_api_unlink(void)
     uint8_t *path = &xstack[xstack_ptr];
     api_zxstack();
     if(path[0]=='0' && path[1]==':'){
+        path = &path[2];
         int lfsresult = lfs_remove(&lfs_volume, (char*)path);
         if(lfsresult < 0)
             return api_return_errno(API_ELFSFS(lfsresult));
