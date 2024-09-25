@@ -218,7 +218,7 @@ bool mia_boot_active(void)
     return mia_state != MIA_IDLE;
 }
 
-/* Basic 1.1 CLOAD read byte patch
+/* Basic CLOAD read byte patch
 A9 01                LDA #$01
 8D 15 03             STA $0315
 AD 15 03   WAIT:     LDA $0315
@@ -227,8 +227,9 @@ AD 17 03             LDA $0317
 85 2F                STA $2F
 60                   RTS
 */
+#define CLOAD_PATCH_10_ADDR (0xE630)
 #define CLOAD_PATCH_11_ADDR (0xE6C9)
-const uint8_t __in_flash() mia_cload_patch_11[] = {
+const uint8_t __in_flash() mia_cload_patch[] = {
     0xA9, 0x01, 0x8D, 0x15, 0x03, 0xAD, 0x15, 0x03,
     0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x60
 };
@@ -240,8 +241,15 @@ const uint8_t __in_flash() mia_cload_patch_11[] = {
 const uint8_t __in_flash() mia_synch_patch_11[] = {
     0x4C, 0x4D, 0xE7 
 };
+/* Basic 1.0 CLOAD synch patch
+4C 4D E7             JMP $E6AD
+*/
+#define SYNCH_PATCH_10_ADDR (0xE696)
+const uint8_t __in_flash() mia_synch_patch_10[] = {
+    0x4C, 0xAD, 0xE6 
+};
 
-/* Basic 1.1 CLOAD read bit patch
+/* Basic CLOAD read bit patch
 48                   PHA
 A9 04                LDA #$04
 8D 15 03             STA $0315
@@ -252,8 +260,9 @@ AD 17 03             LDA $0317
 68                   PHA
 60                   RTS
 */
+#define READ_BIT_PATCH_10_ADDR (0xE67D)
 #define READ_BIT_PATCH_11_ADDR (0xE71C)
-const uint8_t __in_flash() mia_read_bit_patch_11[] = {
+const uint8_t __in_flash() mia_read_bit_patch[] = {
     0x48, 0xA9, 0x04, 0x8D, 0x15, 0x03, 0xAD, 0x15, 
     0x03, 0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x6A, 0x68, 
     0x60
@@ -309,17 +318,28 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
                             xram[SYNCH_PATCH_11_ADDR+i] = mia_synch_patch_11[i];
                         }
-                        for(uint16_t i=0; i<sizeof(mia_read_bit_patch_11); i++){
-                            xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch_11[i];
+                        for(uint16_t i=0; i<sizeof(mia_read_bit_patch); i++){
+                            xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch[i];
                         }
                         //Disable byte patch if bit mode is enabledß
                         if(!(mia_boot_settings & MIA_BOOTSET_TAP_BIT)){     
-                            for(uint16_t i=0; i<sizeof(mia_cload_patch_11); i++){
-                                xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch_11[i];
+                            for(uint16_t i=0; i<sizeof(mia_cload_patch); i++){
+                                xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch[i];
                             }
                         }
                      }else{
-                        printf("CLOAD patch for BASIC10 not implemented\n");
+                        for(uint16_t i=0; i<sizeof(mia_synch_patch_10); i++){
+                            xram[SYNCH_PATCH_10_ADDR+i] = mia_synch_patch_10[i];
+                        }
+                        for(uint16_t i=0; i<sizeof(mia_read_bit_patch); i++){
+                            xram[READ_BIT_PATCH_10_ADDR+i] = mia_read_bit_patch[i];
+                        }
+                        //Disable byte patch if bit mode is enabledß
+                        if(!(mia_boot_settings & MIA_BOOTSET_TAP_BIT)){     
+                            for(uint16_t i=0; i<sizeof(mia_cload_patch); i++){
+                                xram[CLOAD_PATCH_10_ADDR+i] = mia_cload_patch[i];
+                            }
+                        }
                     }
                 }
                 if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
@@ -1262,17 +1282,18 @@ void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac)
 }
 
 void mia_api_boot(void){
+    bool rom_opened;
     mia_boot_settings = API_A;
     if(!!(mia_boot_settings & MIA_BOOTSET_FDC)){
         if(!rom_load("MICRODISC",9)){
-            ssd_write_text(0,2,true,"!rom_load failed");
+            printf("!rom_load failed\n");
             api_return_errno(API_EMFILE);
         }else{
-            ssd_write_text(0,2,false,"DEV ROM loaded ok");
+            printf("DEV ROM loaded ok\n");
             if(mia_boot_settings & MIA_BOOTSET_FAST){
                 mia_set_rom_ram_enable(true,false);
                 //Returns control with api_return_boot() when ROM has loaded
-                ssd_write_text(0,2,false,"Fast boot ON");
+                printf("Fast boot ON\n");
             }else{
                 api_return_ax(0);
                 main_stop();
@@ -1280,21 +1301,29 @@ void mia_api_boot(void){
             mia_state = MIA_LOADING_DEVROM;
         }
     }else{
-        if(!rom_load("BASIC11",7)){
-            ssd_write_text(0,2,true,"!rom_load failed");
+        if(!!(mia_boot_settings & MIA_BOOTSET_B11)){
+            rom_opened = rom_load("BASIC11",7);
+            if(!rom_opened)
+                rom_opened = rom_load("basic11.rp6502",14);
+        }else{
+            rom_opened = rom_load("BASIC10",7);
+            if(!rom_opened)
+                rom_opened = rom_load("basic10.rp6502",14);
+        }
+        if(!rom_opened){
+            printf("!rom_load failed\n");
             api_return_errno(API_EMFILE);
         }else{
-            ssd_write_text(0,2,false,"BASIC11 ROM loaded ok");
+            printf("BASIC ROM loaded ok\n");
             if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
                 mia_set_rom_ram_enable(false,true);
                 //Returns control with api_return_boot() when ROM has loaded
-                ssd_write_text(0,2,false,"Fast boot ON");
+                printf("Fast boot ON\n");
             }else{
                 api_return_ax(0);
                 main_stop();
             }
             mia_state = MIA_LOADING_BIOS;
         }
-
     }
 }
