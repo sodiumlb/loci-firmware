@@ -225,13 +225,15 @@ AD 15 03   WAIT:     LDA $0315
 D0 FB                BNE WAIT
 AD 17 03             LDA $0317
 85 2F                STA $2F
+18                   CLC
 60                   RTS
 */
 #define CLOAD_PATCH_10_ADDR (0xE630)
 #define CLOAD_PATCH_11_ADDR (0xE6C9)
 const uint8_t __in_flash() mia_cload_patch[] = {
     0xA9, 0x01, 0x8D, 0x15, 0x03, 0xAD, 0x15, 0x03,
-    0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x60
+    0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x85, 0x2F, 0x18,
+    0x60
 };
 
 /* Basic 1.1 CLOAD synch patch
@@ -242,7 +244,7 @@ const uint8_t __in_flash() mia_synch_patch_11[] = {
     0x4C, 0x4D, 0xE7 
 };
 /* Basic 1.0 CLOAD synch patch
-4C 4D E7             JMP $E6AD
+4C AD E6             JMP $E6AD
 */
 #define SYNCH_PATCH_10_ADDR (0xE696)
 const uint8_t __in_flash() mia_synch_patch_10[] = {
