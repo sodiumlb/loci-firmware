@@ -12,6 +12,7 @@
 #include "sys/cfg.h"
 #include "sys/lfs.h"
 //#include "sys/pix.h"
+#include "sys/mem.h"
 #include "sys/mia.h"
 #include "fatfs/ff.h"
 
@@ -215,10 +216,12 @@ void rom_mon_install(const char *args, size_t len)
         if (!strnicmp(".RP6502", args + lfs_name_len - 7, 7))
             lfs_name_len -= 7;
     if (lfs_name_len > 4){
-        if (!strnicmp(".DSK", args + lfs_name_len - 4, 4) )
+        if(!strnicmp(".DSK", args + lfs_name_len - 4, 4) || 
+           !strnicmp(".TAP", args + lfs_name_len - 4, 4) || 
+           !strnicmp(".ROM", args + lfs_name_len - 4, 4) )      //Raw ROM files
+        {
             is_rom = false;
-        if (!strnicmp(".TAP", args + lfs_name_len - 4, 4) )
-            is_rom = false;
+        }
     }
     if (lfs_name_len > LFS_NAME_MAX)
         lfs_name_len = 0;
@@ -358,6 +361,19 @@ bool rom_load(const char *args, size_t len)
         return true;
     }
     return false;
+}
+
+bool rom_load_raw(const char *name)
+{
+        struct lfs_info info;
+        if (lfs_stat(&lfs_volume, name, &info) < 0)
+            return false;
+        if(lfs_file_opencfg(&lfs_volume, &lfs_file, name, LFS_O_RDONLY, &lfs_file_config) < 0)
+            return false;
+        lfs_file_read(&lfs_volume, &lfs_file, &xram[0xC000], 0x4000);
+        if(lfs_file_close(&lfs_volume, &lfs_file) < 0)
+            return false;
+        return true;            
 }
 
 void rom_mon_info(const char *args, size_t len)
