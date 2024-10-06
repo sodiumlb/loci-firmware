@@ -63,6 +63,7 @@ static enum {
     EXT_LOADING_DEVROM,
     EXT_LOADING_BIOS,
     EXT_BOOT_LOCI,
+    EXT_CAPTURE_IRQ,
 } ext_state;
 
 
@@ -185,7 +186,11 @@ void ext_boot_loci(void){
         ext_embedded_rom(&locirom[0], locirom_size, 0xC000);
         ext_patch_version();
         ext_patch_timings();
-        main_run();
+        if(!main_active())
+            main_run();
+        else
+            IOREGS(0x03BB) = 0x00;  //Release IRQ loop
+
     }
 #endif
     printf("Booting ROM from %s\n",(
@@ -201,9 +206,9 @@ void ext_task(void)
         case EXT_LOADING_DEVROM:
             if(!rom_active()){
                 if(!rom_load("BASIC11",7)){
-                    ssd_write_text(0,2,true,"!rom_load failed");
+                    printf("!ext rom_load failed\n");
                 }else{
-                    ssd_write_text(0,1,false,"BIOS loaded ok");
+                    printf("ext BIOS loaded ok\n");
                 }
                 ext_state = EXT_LOADING_BIOS;
             }
@@ -213,12 +218,21 @@ void ext_task(void)
                 ext_state = EXT_IDLE;
                 ext_patch_version();
                 ext_patch_timings();
-                main_run();
+                if(!main_active())
+                    main_run();
+                else
+                    IOREGS(0x03BB) = 0x00;  //Release IRQ loop
               }
             break;
         case EXT_BOOT_LOCI:
             if(!main_active())
                 ext_boot_loci();
+            break;
+        case EXT_CAPTURE_IRQ:
+            if(mia_get_snoop_flag()){
+                printf("Loop hit!\n");
+                ext_boot_loci();
+            }
             break;
     }
 
@@ -241,8 +255,24 @@ void ext_task(void)
         }
     }else{
         if(ext_btn_released(EXT_BTN_A)){
+            printf("IRQ loop\n");
+            /*
+                Create an IRQ loop
+                03BB  6C FC FF  JMP ($FFFC) 
+            */
+            mia_clear_snoop_flag();
+            IOREGS(0x03BA) = 0x50;
+            IOREGS(0x03BB) = 0xFE;
+            IOREGS(0x03BC) = 0x6C;
+            IOREGS(0x03BD) = 0xFC;
+            IOREGS(0x03BE) = 0xFF;
+            //XRAMW(0xFFFC) = 0x03BB;
+            XRAMW(0xFFFE) = 0x03BA;
+            ext_state = EXT_CAPTURE_IRQ;
+            /*
             main_break();
             ext_state = EXT_BOOT_LOCI;
+            */
         }
     }
     if(ext_get_cached(EXT_BTN_A) && (absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) > 0)){
