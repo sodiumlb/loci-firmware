@@ -46,6 +46,15 @@ static volatile int32_t rw_pos;
 static volatile int32_t rw_end;
 static volatile bool irq_enabled;
 static volatile bool reset_requested;
+static volatile bool snoop_flag;
+
+void mia_clear_snoop_flag(void){
+    snoop_flag = false;
+}
+bool mia_get_snoop_flag(void){
+    return snoop_flag;
+}
+
 
 #define MIA_BOOTSET_FDC 0x01
 #define MIA_BOOTSET_TAP 0x02
@@ -789,6 +798,9 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                                 IOREGSW(0x03B4) = ++rw_addr;
                             }
                         }
+                        break;
+                    case CASE_READ(0x03BB):
+                        snoop_flag = true;
                         break;
                     default:
                         //Default register write handling
