@@ -50,7 +50,7 @@ uint32_t mia_buf_crc32();
 
 //Enable read responce of ROM address space
 //void mia_set_rom_read_enable(bool enable);
-void mia_set_rom_ram_enable(bool device_rom, bool overlay_ram);
+void mia_set_rom_ram_enable(bool device_rom, bool basic_rom);
 
 //Call boot from Oric - typical from CUmini ROM
 void mia_api_boot(void);
