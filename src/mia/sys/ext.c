@@ -54,15 +54,18 @@ static uint8_t ext_port_idata = 0;
 static uint8_t ext_port_idata_prev = 0;
 static uint8_t ext_port_dir = I2C_IOEXP_DIR;
 
-#define EXT_BTN_LONGPRESS 2000
+#define EXT_BTN_LONGPRESS_MS 2000
+#define EXT_IRQ_CAPTURE_TIMEOUT_MS 500
 static absolute_time_t ext_btn_holdtimer; 
-
+static absolute_time_t ext_irq_capture_timeout;
+static bool ext_btn_hold_oneshot;
 
 static enum {
     EXT_IDLE,
     EXT_LOADING_DEVROM,
     EXT_LOADING_BIOS,
     EXT_BOOT_LOCI,
+    EXT_BOOT_DIAG,
     EXT_CAPTURE_IRQ,
 } ext_state;
 
@@ -228,10 +231,23 @@ void ext_task(void)
             if(!main_active())
                 ext_boot_loci();
             break;
+#ifdef EMBEDDED_TEST108K_ROM
+        case EXT_BOOT_DIAG:
+            if(!main_active()){
+                printf("Booting diag ROM\n");
+                ext_embedded_rom(&test108k_rom[0], test108k_rom_size, 0xC000);
+                main_run();
+                ext_state = EXT_IDLE;
+            }
+            break;                
+#endif
         case EXT_CAPTURE_IRQ:
             if(mia_get_snoop_flag()){
                 printf("Loop hit!\n");
                 ext_boot_loci();
+            }else if(absolute_time_diff_us(ext_irq_capture_timeout, get_absolute_time()) > 0){
+                main_break();
+                ext_state = EXT_BOOT_LOCI;
             }
             break;
     }
@@ -243,40 +259,64 @@ void ext_task(void)
     ext_update();
 
     if(ext_btn_pressed(EXT_BTN_A)){
-        ext_btn_holdtimer = delayed_by_ms(get_absolute_time(), EXT_BTN_LONGPRESS);
+        ext_btn_holdtimer = delayed_by_ms(get_absolute_time(), EXT_BTN_LONGPRESS_MS);
+        ext_btn_hold_oneshot = true;
     }
 
+    //Cold button interrupt
     if(!main_active()){
-        if(ext_btn_released(EXT_BTN_A)){
-            if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
+        //Short press
+        if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
+            if(ext_btn_released(EXT_BTN_A)){
                 ext_put(EXT_RESET,true);
                 ext_state = EXT_BOOT_LOCI;
             }
+        }else{
+        //Long hold
+#ifdef EMBEDDED_TEST108K_ROM
+            if(ext_get_cached(EXT_BTN_A) && ext_btn_hold_oneshot){
+                ext_btn_hold_oneshot = false;
+                ext_put(EXT_RESET,true);
+                ext_state = EXT_BOOT_DIAG;
+            }     
+#endif
         }
+    //Warm button interrupt
     }else{
-        if(ext_btn_released(EXT_BTN_A)){
-            printf("IRQ loop\n");
-            /*
-                Create an IRQ loop
-                03BB  6C FC FF  JMP ($FFFC) 
-            */
-            mia_clear_snoop_flag();
-            IOREGS(0x03BA) = 0x50;
-            IOREGS(0x03BB) = 0xFE;
-            IOREGS(0x03BC) = 0x6C;
-            IOREGS(0x03BD) = 0xFC;
-            IOREGS(0x03BE) = 0xFF;
-            //XRAMW(0xFFFC) = 0x03BB;
-            XRAMW(0xFFFE) = 0x03BA;
-            ext_state = EXT_CAPTURE_IRQ;
-            /*
-            main_break();
-            ext_state = EXT_BOOT_LOCI;
-            */
+        //Short press
+        if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
+            if(ext_btn_released(EXT_BTN_A)){
+                printf("IRQ loop\n");
+                /*
+                    Create an IRQ loop
+                    03BB  6C FC FF  JMP ($FFFC) 
+                */
+                mia_clear_snoop_flag();
+                IOREGS(0x03BA) = 0x50;
+                IOREGS(0x03BB) = 0xFE;
+                IOREGS(0x03BC) = 0x6C;
+                IOREGS(0x03BD) = 0xFC;
+                IOREGS(0x03BE) = 0xFF;
+                //XRAMW(0xFFFC) = 0x03BB;
+                XRAMW(0xFFFE) = 0x03BA;
+                ext_pulse(EXT_IRQ);
+                ext_state = EXT_CAPTURE_IRQ;
+                ext_irq_capture_timeout = delayed_by_ms(get_absolute_time(), EXT_IRQ_CAPTURE_TIMEOUT_MS);
+                /*
+                main_break();
+                ext_state = EXT_BOOT_LOCI;
+                */
+            }
+        }else{
+        //Long press
+#ifdef EMBEDDED_TEST108K_ROM
+            if(ext_get_cached(EXT_BTN_A) && ext_btn_hold_oneshot){
+                ext_btn_hold_oneshot = false;
+                main_break();
+                ext_state = EXT_BOOT_DIAG;
+            }     
+#endif   
         }
-    }
-    if(ext_get_cached(EXT_BTN_A) && (absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) > 0)){
-        //Longpress function here
     }
 }
 
