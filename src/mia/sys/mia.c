@@ -61,6 +61,7 @@ bool mia_get_snoop_flag(void){
 #define MIA_BOOTSET_B11 0x04
 #define MIA_BOOTSET_TAP_BIT 0x08
 #define MIA_BOOTSET_FAST 0x80
+#define MIA_BOOTSET_RESUME 0x40
 
 static uint8_t mia_boot_settings;
 
@@ -364,8 +365,15 @@ void mia_task(void)
                     }
                 }
                 if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
-                    ssd_write_text(0,1,false,"**Return Boot**");
-                    api_return_boot();
+                    if(!!(mia_boot_settings & MIA_BOOTSET_RESUME)){
+                        printf("Resuming\n");
+                        __dsb();
+                        api_return_resume();
+                    }else{
+                        printf("Booting\n");
+                        __dsb();
+                        api_return_boot();
+                    }
                 }else{
                     main_run();
                 }
@@ -419,6 +427,7 @@ void mia_read_buf(uint16_t addr)
     assert(!cpu_active());
     // avoid forbidden areas
     uint16_t len = mbuf_len;
+    /*
     while (len && (addr + len > 0xFFFA))
         if (addr + --len <= 0xFFFF)
             mbuf[len] = REGS(addr + len);
@@ -427,6 +436,9 @@ void mia_read_buf(uint16_t addr)
     while (len && (addr + len > 0xFF00))
         if (addr + --len <= 0xFFFF)
             mbuf[len] = 0;
+    */
+    if(addr + len > 0xFFFF)
+        len = (0x10000 - addr);
     if (!len)
         return;
     rw_addr = addr;
@@ -442,11 +454,15 @@ void mia_verify_buf(uint16_t addr)
     // avoid forbidden areas
     action_result = -1;
     uint16_t len = mbuf_len;
+    /*
     while (len && (addr + len > 0xFFFA))
         if (addr + --len <= 0xFFFF && mbuf[len] != REGS(addr + len))
             action_result = addr + len;
     while (len && (addr + len > 0xFF00))
         --len;
+    */
+    if(addr + len > 0xFFFF)
+        len = (0x10000 - addr);
     if (!len || action_result != -1)
         return;
     rw_addr = addr;
@@ -461,11 +477,15 @@ void mia_write_buf(uint16_t addr)
     assert(!cpu_active());
     // avoid forbidden area
     uint16_t len = mbuf_len;
+    /*
     while (len && (addr + len > 0xFFFA))
         if (addr + --len <= 0xFFFF)
             REGS(addr + len) = mbuf[len];
     while (len && (addr + len > 0xFF00))
         len--;
+    */
+    if(addr + len > 0xFFFF)
+        len = (0x10000 - addr);
     if (!len)
         return;
     rw_addr = addr;
@@ -1257,7 +1277,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //DonÃÂÃÂ´t Enable levelshifters yet
+    //Don't Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 

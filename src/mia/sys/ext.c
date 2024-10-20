@@ -62,7 +62,6 @@ static bool ext_btn_hold_oneshot;
 
 static enum {
     EXT_IDLE,
-    EXT_LOADING_DEVROM,
     EXT_LOADING_BIOS,
     EXT_BOOT_LOCI,
     EXT_BOOT_DIAG,
@@ -191,8 +190,9 @@ void ext_boot_loci(void){
         ext_patch_timings();
         if(!main_active())
             main_run();
-        else
-            IOREGS(0x03BB) = 0x00;  //Release IRQ loop
+        else{
+            IOREGS(0x03BB) = 0x00;  //Release IRQ trap
+        }
 
     }
 #endif
@@ -206,16 +206,6 @@ void ext_boot_loci(void){
 void ext_task(void)
 {
     switch(ext_state){
-        case EXT_LOADING_DEVROM:
-            if(!rom_active()){
-                if(!rom_load("BASIC11",7)){
-                    printf("!ext rom_load failed\n");
-                }else{
-                    printf("ext BIOS loaded ok\n");
-                }
-                ext_state = EXT_LOADING_BIOS;
-            }
-            break;
         case EXT_LOADING_BIOS:
             if(!rom_active()){
                 ext_state = EXT_IDLE;
@@ -224,7 +214,7 @@ void ext_task(void)
                 if(!main_active())
                     main_run();
                 else
-                    IOREGS(0x03BB) = 0x00;  //Release IRQ loop
+                    IOREGS(0x03BB) = 0x00;  //Release IRQ trap
               }
             break;
         case EXT_BOOT_LOCI:
@@ -286,19 +276,20 @@ void ext_task(void)
         //Short press
         if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
             if(ext_btn_released(EXT_BTN_A)){
-                printf("IRQ loop\n");
+                printf("IRQ trap on\n");
                 /*
-                    Create an IRQ loop
-                    03BB  6C FC FF  JMP ($FFFC) 
+                    Create an IRQ trap. Jump to NMI vector when released. ROM save state routine waits there.
+                    03BA  50 FE     BVC -2    
+                    03BC  6C FA FF  JMP ($FFFA) 
                 */
                 mia_clear_snoop_flag();
                 IOREGS(0x03BA) = 0x50;
                 IOREGS(0x03BB) = 0xFE;
                 IOREGS(0x03BC) = 0x6C;
-                IOREGS(0x03BD) = 0xFC;
+                IOREGS(0x03BD) = 0xFA;
                 IOREGS(0x03BE) = 0xFF;
                 //XRAMW(0xFFFC) = 0x03BB;
-                XRAMW(0xFFFE) = 0x03BA;
+                XRAMW(0xFFFE) = 0x03BA;             //Enable IRQ trap
                 ext_pulse(EXT_IRQ);
                 ext_state = EXT_CAPTURE_IRQ;
                 ext_irq_capture_timeout = delayed_by_ms(get_absolute_time(), EXT_IRQ_CAPTURE_TIMEOUT_MS);

@@ -142,17 +142,41 @@ static inline bool api_is_xstack_empty(void)
 }
 
 // Return works by manipulating 10 bytes of registers.
-// FFF0 B8      CLV
-// FFF1 50 FE   BVC -2
-// FFF3 A9 FF   LDA #$FF
-// FFF5 A2 FF   LDX #$FF
-// FFF7 60      RTS
-// FFF8 FF FF   .SREG $FF $FF
+// 03B0 B8      CLV
+// 03B1 50 FE   BVC -2
+// 03B3 A9 FF   LDA #$FF
+// 03B5 A2 FF   LDX #$FF
+// 03B7 60      RTS
+// 03B8 FF FF   .SREG $FF $FF
 
 static inline void api_return_blocked() { *(uint32_t *)&regs[0x10] = 0xA9FE50B8; }
 static inline void api_return_released() { *(uint32_t *)&regs[0x10] = 0xA90050B8; }
+
+// Fast boot by jumping to reset vector
+// 03B0   B8                   CLV
+// 03B1   50 00                BVC +0
+// 03B3   6C FC FF             JMP ($FFFC)
+// 03B6   00                   BRK
+// 03B7   60                   RTS
 static inline void api_return_boot() { 
     *(uint32_t *)&regs[0x14] = 0x6000FFFC; 
+    *(uint32_t *)&regs[0x10] = 0x6C0050B8; 
+}
+
+// Resume by calling RTI
+// 03B0   B8                   CLV
+// 03B1   50 00                BVC +0
+// 03B3   40                   RTI
+//static inline void api_return_resume() { *(uint32_t *)&regs[0x10] = 0x400050B8; }
+
+// Resume by jumping to IRQ vector 
+// 03B0   B8                   CLV
+// 03B1   50 00                BVC +0
+// 03B3   6C FE FF             JMP ($FFFE)
+// 03B6   00                   BRK
+// 03B7   60                   RTS
+static inline void api_return_resume() { 
+    *(uint32_t *)&regs[0x14] = 0x6000FFFE; 
     *(uint32_t *)&regs[0x10] = 0x6C0050B8; 
 }
 
