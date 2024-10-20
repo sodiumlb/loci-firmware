@@ -363,14 +363,14 @@ bool rom_load(const char *args, size_t len)
     return false;
 }
 
-bool rom_load_raw(const char *name)
+bool rom_load_raw(const char *name, uint16_t addr)
 {
         struct lfs_info info;
         if (lfs_stat(&lfs_volume, name, &info) < 0)
             return false;
         if(lfs_file_opencfg(&lfs_volume, &lfs_file, name, LFS_O_RDONLY, &lfs_file_config) < 0)
             return false;
-        lfs_file_read(&lfs_volume, &lfs_file, &xram[0xC000], 0x4000);
+        lfs_file_read(&lfs_volume, &lfs_file, &xram[addr], 0x10000-addr);
         if(lfs_file_close(&lfs_volume, &lfs_file) < 0)
             return false;
         return true;            

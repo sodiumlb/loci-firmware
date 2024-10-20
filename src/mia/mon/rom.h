@@ -32,8 +32,8 @@ void rom_mon_remove(const char *args, size_t len);
 // Begin loading an installed rom, if exists.
 bool rom_load(const char *args, size_t len);
 
-// Blocking load of raw ROM file to xram[0xC000] - LFS only 
-bool rom_load_raw(const char *name);
+// Blocking load of raw ROM file to xram[addr] - LFS only 
+bool rom_load_raw(const char *name, uint16_t addr);
 
 // Display help from an installed ROM.
 bool rom_help(const char *args, size_t len);

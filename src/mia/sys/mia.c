@@ -306,28 +306,31 @@ void mia_task(void)
                 if(mia_boot_settings & MIA_BOOTSET_B11){
                     rom_is_loading = rom_load("BASIC11",7);
                     if(!rom_is_loading)
-                        rom_is_loading = rom_load_raw("basic11.rom");
+                        rom_is_loading = rom_load_raw("basic11.rom",0xC000);
+                    if(!rom_is_loading)
+                        rom_is_loading = rom_load_raw("basic11b.rom",0xC000);
+
                     //if(!rom_load("test108k",8)){
                     if(!rom_is_loading){
-                            ssd_write_text(0,2,true,"!rom_load 11 failed");
+                        printf("!rom_load 11 failed\n");
                     }else{
-                        ssd_write_text(0,1,false,"BIOS loaded ok");
+                        printf("BIOS loaded ok\n");
                     }
                 }else{
                     rom_is_loading = rom_load("BASIC10",7);
                     if(!rom_is_loading)
-                        rom_is_loading = rom_load_raw("basic10.rom");
+                        rom_is_loading = rom_load_raw("basic10.rom",0xC000);
                     if(!rom_is_loading){
-                        ssd_write_text(0,2,true,"!rom_load 10 failed");
+                        printf("!rom_load 10 failed\n");
                     }else{
-                        ssd_write_text(0,1,false,"BIOS loaded ok");
+                        printf("BIOS loaded ok\n");
                     }
                 }
             }
             break;
         case MIA_LOADING_BIOS:
             if(!rom_active()){
-                ssd_write_text(0,1,false,"BIOS loaded done");
+                printf("BIOS loaded done\n");
                 mia_state = MIA_IDLE;
                 //Patch for TAP loading CLOAD
                 if(mia_boot_settings & MIA_BOOTSET_TAP){
@@ -338,7 +341,7 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_read_bit_patch); i++){
                             xram[READ_BIT_PATCH_11_ADDR+i] = mia_read_bit_patch[i];
                         }
-                        //Disable byte patch if bit mode is enabled�
+                        //Disable byte patch if bit mode is enabled
                         if(!(mia_boot_settings & MIA_BOOTSET_TAP_BIT)){     
                             for(uint16_t i=0; i<sizeof(mia_cload_patch); i++){
                                 xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch[i];
@@ -351,7 +354,7 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_read_bit_patch); i++){
                             xram[READ_BIT_PATCH_10_ADDR+i] = mia_read_bit_patch[i];
                         }
-                        //Disable byte patch if bit mode is enabled�
+                        //Disable byte patch if bit mode is enabled
                         if(!(mia_boot_settings & MIA_BOOTSET_TAP_BIT)){     
                             for(uint16_t i=0; i<sizeof(mia_cload_patch); i++){
                                 xram[CLOAD_PATCH_10_ADDR+i] = mia_cload_patch[i];
@@ -1195,7 +1198,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //Don�t Enable levelshifters yet
+    //DonÃÂÃÂÃÂÃÂ´t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 
@@ -1305,8 +1308,11 @@ void mia_api_boot(void){
     bool rom_opened;
     mia_boot_settings = API_A;
     if(!!(mia_boot_settings & MIA_BOOTSET_FDC)){
-        if(!rom_load("MICRODISC",9)){
-            printf("!rom_load failed\n");
+        rom_opened = rom_load("MICRODISC",9);
+        if(!rom_opened)
+            rom_opened = rom_load_raw("microdis.rom",0xA000);
+        if(!rom_opened){
+            printf("!rom_load microdisc failed\n");
             api_return_errno(API_EMFILE);
         }else{
             printf("DEV ROM loaded ok\n");
@@ -1324,14 +1330,16 @@ void mia_api_boot(void){
         if(!!(mia_boot_settings & MIA_BOOTSET_B11)){
             rom_opened = rom_load("BASIC11",7);
             if(!rom_opened)
-                rom_opened = rom_load_raw("basic11.rom");
+                rom_opened = rom_load_raw("basic11.rom",0xC000);
+            if(!rom_opened)
+                rom_opened = rom_load_raw("basic11b.rom",0xC000);
         }else{
             rom_opened = rom_load("BASIC10",7);
             if(!rom_opened)
-                rom_opened = rom_load_raw("basic10.rom");
+                rom_opened = rom_load_raw("basic10.rom",0xC000);
         }
         if(!rom_opened){
-            printf("!rom_load failed\n");
+            printf("!rom_load basic failed\n");
             api_return_errno(API_EMFILE);
         }else{
             printf("BASIC ROM loaded ok\n");
