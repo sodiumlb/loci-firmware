@@ -283,6 +283,7 @@ void mia_task(void)
 {
     static uint32_t prev_io_errors = 0;
     bool rom_is_loading;
+    static uint8_t prev_vmode = 255;
     // check on watchdog unless we explicitly ended or errored
     if (mia_active() && action_result == -1)
     {
@@ -383,6 +384,16 @@ void mia_task(void)
         ext_put(EXT_RESET,true);
         reset_requested = false;
     }
+    if(IOREGS(0x03BF) != prev_vmode){
+        prev_vmode = IOREGS(0x03BF);
+        printf("VMode %02x\n",prev_vmode);
+    }
+    /*
+    if(!(MIA_ULA_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ULA_SM)))){
+        uint32_t data = MIA_ULA_PIO->rxf[MIA_ULA_SM];
+        printf("VMode raw %02x\n",(uint8_t)(data & 0xff));
+    }
+    */
 }
 
 bool mia_print_error_message(void)
@@ -838,6 +849,7 @@ static __attribute__((optimize("O2"))) void act_loop(void)
     } /* while loop */
 }
 
+/*
 static void mia_write_pio_init(void)
 {
     
@@ -893,7 +905,7 @@ static void mia_write_pio_init(void)
         true);
     
 }
-
+*/
 /*
 static void mia_read_pio_init(void)
 { 
@@ -1187,6 +1199,53 @@ static void mia_map_pio_init(void)
     pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, false);   
 }
 
+static void mia_ula_pio_init(void)
+{
+    // PIO to manage ULA mode snooping
+    uint offset = pio_add_program(MIA_ULA_PIO, &mia_ula_program);
+    pio_sm_config config = mia_ula_program_get_default_config(offset);
+    sm_config_set_in_pins(&config, D_PIN_BASE);
+    sm_config_set_in_shift(&config, false, true, 8);
+    pio_sm_init(MIA_ULA_PIO, MIA_ULA_SM, offset, &config);
+    pio_sm_put(MIA_ULA_PIO, MIA_ULA_SM, 0x18 >> 3);    //Match with mode change Oric ULA screen attributes
+    pio_sm_exec_wait_blocking(MIA_ULA_PIO, MIA_ULA_SM, pio_encode_pull(false, true));
+    pio_sm_exec_wait_blocking(MIA_ULA_PIO, MIA_ULA_SM, pio_encode_mov(pio_x, pio_osr));
+    pio_sm_set_enabled(MIA_ULA_PIO, MIA_ULA_SM, true);
+
+    int mode_chan = dma_claim_unused_channel(true);
+    int trig_chan = dma_claim_unused_channel(true);
+
+    dma_channel_config mode_dma = dma_channel_get_default_config(mode_chan);
+    //channel_config_set_high_priority(&mode_dma, true);
+    channel_config_set_dreq(&mode_dma, pio_get_dreq(MIA_ULA_PIO, MIA_ULA_SM, false));
+    channel_config_set_transfer_data_size(&mode_dma, DMA_SIZE_8);
+    channel_config_set_read_increment(&mode_dma, false);
+    channel_config_set_chain_to(&mode_dma, trig_chan);
+
+    dma_channel_configure(
+        mode_chan,
+        &mode_dma,
+        &IOREGS(0x03BF),                    // dst
+        &MIA_ULA_PIO->rxf[MIA_ULA_SM],      // src
+        1,
+        true);
+
+    uint32_t trig_addr = &IOREGS(0x03BF);
+    dma_channel_config trig_dma = dma_channel_get_default_config(mode_chan);
+    //channel_config_set_high_priority(&mode_dma, true);
+    //channel_config_set_dreq(&mode_dma, pio_get_dreq(MIA_ULA_PIO, MIA_ULA_SM, false));
+    channel_config_set_read_increment(&trig_dma, false);
+    channel_config_set_chain_to(&trig_dma, mode_chan);
+    dma_channel_configure(
+        trig_chan,
+        &trig_dma,
+        &dma_channel_hw_addr(mode_chan)->write_addr,     // dst
+        &trig_addr,                                     // src
+        1,
+        false);
+
+}
+
 
 void mia_init(void)
 {
@@ -1198,7 +1257,7 @@ void mia_init(void)
     //ext_put(EXT_nRESET,false);
     //ext_set_dir(EXT_IRQ, true);
     //gpio_set_pulls(nIRQ_PIN,false,false);
-    //DonÃÂÃÂÃÂÃÂ´t Enable levelshifters yet
+    //DonÃÂÃÂ´t Enable levelshifters yet
     //ext_put(EXT_OE,false);
     //gpio_init(DIR_PIN);
 
@@ -1284,6 +1343,7 @@ void mia_init(void)
     mia_map_pio_init(); //Must be first for MAP tuning
     mia_act_pio_init();
     //mia_write_pio_init();
+    mia_ula_pio_init();
     
     //Same PIO order matters timing tuning
     mia_read_pio_init();    //read_data, read_addr
@@ -1293,7 +1353,7 @@ void mia_init(void)
 
 void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac)
 {
-    pio_sm_set_clkdiv_int_frac(MIA_WRITE_PIO, MIA_WRITE_SM, clkdiv_int, clkdiv_frac);
+    //pio_sm_set_clkdiv_int_frac(MIA_WRITE_PIO, MIA_WRITE_SM, clkdiv_int, clkdiv_frac);
     pio_sm_set_clkdiv_int_frac(MIA_READ_PIO, MIA_READ_DATA_SM, clkdiv_int, clkdiv_frac);
     pio_sm_set_clkdiv_int_frac(MIA_READ_PIO, MIA_READ_ADDR_SM, clkdiv_int, clkdiv_frac);
     pio_sm_set_clkdiv_int_frac(MIA_IO_READ_PIO, MIA_IO_READ_SM, clkdiv_int, clkdiv_frac);
@@ -1302,6 +1362,7 @@ void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac)
     pio_sm_set_clkdiv_int_frac(MIA_ACT_PIO, MIA_ACT_SM, clkdiv_int, clkdiv_frac);
     pio_sm_set_clkdiv_int_frac(MIA_MAP_PIO, MIA_MAP_SM1, clkdiv_int, clkdiv_frac);
     pio_sm_set_clkdiv_int_frac(MIA_MAP_PIO, MIA_MAP_SM2, clkdiv_int, clkdiv_frac);
+    pio_sm_set_clkdiv_int_frac(MIA_ULA_PIO, MIA_ULA_SM, clkdiv_int, clkdiv_frac);
 }
 
 void mia_api_boot(void){
