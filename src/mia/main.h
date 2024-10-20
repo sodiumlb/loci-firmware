@@ -89,8 +89,10 @@ bool main_api(uint8_t operation);
 #define SDA_PIN 28
 #define SCL_PIN 29
 
-#define MIA_WRITE_PIO pio0
-#define MIA_WRITE_SM 0
+//#define MIA_WRITE_PIO pio0
+//#define MIA_WRITE_SM 0
+#define MIA_ULA_PIO pio0
+#define MIA_ULA_SM 0
 #define MIA_ACT_PIO pio0
 #define MIA_ACT_SM 1
 #define MIA_MAP_PIO pio0

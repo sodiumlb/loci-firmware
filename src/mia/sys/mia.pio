@@ -108,23 +108,40 @@ ismap:
     set pins 0  
 .wrap
 
-; Enable "shadow" writing of the lower 1kB of Oric RAM also in XRAM
-.program mia_write
+;; Enable "shadow" writing of the lower 1kB of Oric RAM also in XRAM
+;.program mia_write
+;
+;.wrap_target
+;start:
+;    wait 0 gpio 25 [20] ;wait for phi2 falling edge
+;    mov isr x           ;xram access base address in x
+;    wait 1 gpio 25  [20];
+;    jmp pin write_init  ;RnW inverted Read=0 Write=1
+;    jmp start
+;
+;write_init:
+;    mov osr pins        ;sample pins when data is stable
+;    out y 14            ;get A[13:0]
+;    in y 14             ;get rest of address
+;    out y 2             ;get A[15:14]
+;    jmp y-- start       ;jump if not zero
+;    push noblock        ;address to FIFO
+;    out isr 8           ;collect data
+;    push noblock        ;Data to FIFO
+;.wrap
+
+; Snooping ULA first read cycle for mode status
+; 0x18>>3 in X
+.program mia_ula
 
 .wrap_target
-start:
-    wait 0 gpio 25 [20] ;wait for phi2 falling edge
-    mov isr x           ;xram access base address in x
-    wait 1 gpio 25  [20];
-    jmp pin write_init  ;RnW inverted Read=0 Write=1
-    jmp start
-write_init:
-    mov osr pins        ;sample pins when data is stable
-    out y 14            ;get A[13:0]
-    in y 14             ;get rest of address
-    out y 2             ;get A[15:14]
-    jmp y-- start       ;jump if not zero
-    push noblock        ;address to FIFO
-    out isr 8           ;collect data
-    push noblock        ;Data to FIFO
+    wait 0 gpio 25 [30] ;wait for phi2 falling edge
+    nop            [10] ;need ca 50 cycles delay
+    mov osr pins        ;sample data D[6:0]
+    out null 3          ;drop D[2:0]
+    out y 4             ;collect D[6:3]
+    jmp x!=y skip       ;skip if not mode attribute (0x18)
+    in pins 8           ;autopush D[6:0]
+skip:
+    wait 1 gpio 25 [31] ;wait for phi2 raising edge
 .wrap
