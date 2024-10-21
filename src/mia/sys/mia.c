@@ -1398,7 +1398,10 @@ void mia_api_boot(void){
         }else{
             printf("DEV ROM loaded ok\n");
             if(mia_boot_settings & MIA_BOOTSET_FAST){
-                mia_set_rom_ram_enable(true,false);
+                if((mia_boot_settings & MIA_BOOTSET_RESUME))    //Resume happens when basic_rom is mapped
+                    mia_set_rom_ram_enable(false,true);
+                else
+                    mia_set_rom_ram_enable(true,false);
                 //Returns control with api_return_boot() when ROM has loaded
                 printf("Fast boot ON\n");
             }else{
