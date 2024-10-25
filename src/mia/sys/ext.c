@@ -9,6 +9,8 @@
 #include "pico/stdlib.h"
 //#include "pico/binary_info.h"
 #include "hardware/i2c.h"
+#include "hardware/pio_instructions.h"
+#include "mia.pio.h"
 #include "mon/rom.h"
 #include "sys/cfg.h"
 #include "sys/com.h"
@@ -55,7 +57,7 @@ static uint8_t ext_port_idata_prev = 0;
 static uint8_t ext_port_dir = I2C_IOEXP_DIR;
 
 #define EXT_BTN_LONGPRESS_MS 2000
-#define EXT_IRQ_CAPTURE_TIMEOUT_MS 500
+#define EXT_IRQ_CAPTURE_TIMEOUT_MS 2000
 static absolute_time_t ext_btn_holdtimer; 
 static absolute_time_t ext_irq_capture_timeout;
 static bool ext_btn_hold_oneshot;
@@ -191,6 +193,7 @@ void ext_boot_loci(void){
         if(!main_active())
             main_run();
         else{
+            mia_set_rom_ram_enable(false,true);
             IOREGS(0x03BB) = 0x00;  //Release IRQ trap
         }
 
@@ -213,8 +216,10 @@ void ext_task(void)
                 ext_patch_timings();
                 if(!main_active())
                     main_run();
-                else
+                else{
+                    mia_set_rom_ram_enable(false,true);
                     IOREGS(0x03BB) = 0x00;  //Release IRQ trap
+                }
               }
             break;
         case EXT_BOOT_LOCI:
@@ -234,6 +239,8 @@ void ext_task(void)
         case EXT_CAPTURE_IRQ:
             if(mia_get_snoop_flag()){
                 printf("Loop hit!\n");
+                MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));  //Restore MAP pio program
+                mia_save_map_sm_enables();
                 ext_boot_loci();
             }else if(absolute_time_diff_us(ext_irq_capture_timeout, get_absolute_time()) > 0){
                 main_break();
@@ -277,6 +284,12 @@ void ext_task(void)
         if(absolute_time_diff_us(ext_btn_holdtimer, get_absolute_time()) < 0){
             if(ext_btn_released(EXT_BTN_A)){
                 printf("IRQ trap on\n");
+
+                //Set the MAP trap for programs using vectors in overlay ram
+                MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
+                MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM)) | (1u << MIA_ROM_READ_SM);
+    
+                //TODO store MAP PIO SM enables for returning later
                 /*
                     Create an IRQ trap. Jump to NMI vector when released. ROM save state routine waits there.
                     03BA  50 FE     BVC -2    
@@ -290,6 +303,7 @@ void ext_task(void)
                 IOREGS(0x03BE) = 0xFF;
                 //XRAMW(0xFFFC) = 0x03BB;
                 XRAMW(0xFFFE) = 0x03BA;             //Enable IRQ trap
+                XRAMW(0xBFFE) = 0x03BA;
                 ext_pulse(EXT_IRQ);
                 ext_state = EXT_CAPTURE_IRQ;
                 ext_irq_capture_timeout = delayed_by_ms(get_absolute_time(), EXT_IRQ_CAPTURE_TIMEOUT_MS);

@@ -99,10 +99,15 @@ start:
     wait 1 gpio 25     [31]
 .wrap_target
     wait 0 gpio 25     [31]  ;wait for phi2 falling edge + A setup-time
+    mov osr !pins            ;prepare for IRQ trap (no map for 0xFFFC-0xFFFF)
+    mov y !null              ;<<- changed in ext.c to "out y 14" when IRQ trap is on
+                             ; 0xa04b, //  3: mov    y, !null         ;trap off          
+                             ; 0x604e, //  3: out    y, 14            ;trap on          
+    jmp !y start             ;jump if zero
     mov osr pins             ;ca 70 cycles delay before setting MAP
-    out y 3                  ;get A[15:13]
-    jmp x!=y start     [20]  ;check matching address
-    nop                [10]  ;<- MAP/RV1 timing adjust 0-31
+    out y 3            [20]  ;get A[15:13]
+    jmp x!=y start     [10]  ;check matching address <- MAP/RV1 timing adjust 0-31
+    ;nop                [10]  ;
 ismap:
     set pins 1         [30]  ;Delay equals MAP pulse width
     set pins 0  
@@ -141,7 +146,7 @@ ismap:
     out null 3          ;drop D[2:0]
     out y 4             ;collect D[6:3]
     jmp x!=y skip       ;skip if not mode attribute (0x18)
-    in pins 8           ;autopush D[6:0]
+    in pins 8           ;autopush D[7:0]
 skip:
     wait 1 gpio 25 [31] ;wait for phi2 raising edge
 .wrap

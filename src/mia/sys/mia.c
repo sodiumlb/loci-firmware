@@ -47,12 +47,19 @@ static volatile int32_t rw_end;
 static volatile bool irq_enabled;
 static volatile bool reset_requested;
 static volatile bool snoop_flag;
+static volatile uint32_t saved_map_sm_enables;
+static volatile uint32_t saved_read_sm_enables;
 
 void mia_clear_snoop_flag(void){
     snoop_flag = false;
 }
 bool mia_get_snoop_flag(void){
     return snoop_flag;
+}
+
+void mia_save_map_sm_enables(void){
+    saved_map_sm_enables = MIA_MAP_PIO->ctrl & 0xf;
+    saved_read_sm_enables = MIA_ROM_READ_PIO->ctrl & 0xf;
 }
 
 
@@ -366,6 +373,7 @@ void mia_task(void)
                 }
                 if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
                     if(!!(mia_boot_settings & MIA_BOOTSET_RESUME)){
+                        MIA_MAP_PIO->ctrl = saved_map_sm_enables;
                         printf("Resuming\n");
                         __dsb();
                         api_return_resume();
@@ -1199,8 +1207,9 @@ static void mia_map_pio_init(void)
     uint offset = pio_add_program(MIA_MAP_PIO, &mia_map_program);
     mia_map_prg_offset = offset;
     pio_sm_config config = mia_map_program_get_default_config(offset);
-    sm_config_set_in_pins(&config, A13_PIN);
+    sm_config_set_in_pins(&config, D_PIN_BASE);             //Prep to get A15 at MSB
     sm_config_set_in_shift(&config, false, false, 0);
+    sm_config_set_out_shift(&config, false, false, 0);  //Shift left, MSB out first
     sm_config_set_set_pins(&config, MAP_PIN, 1);
     //pio_gpio_init(MIA_MAP_PIO, MAP_PIN);
     pio_sm_init(MIA_MAP_PIO, MIA_MAP_SM1, offset, &config);
@@ -1398,10 +1407,13 @@ void mia_api_boot(void){
         }else{
             printf("DEV ROM loaded ok\n");
             if(mia_boot_settings & MIA_BOOTSET_FAST){
-                if((mia_boot_settings & MIA_BOOTSET_RESUME))    //Resume happens when basic_rom is mapped
-                    mia_set_rom_ram_enable(false,true);
-                else
+                if((mia_boot_settings & MIA_BOOTSET_RESUME)){    //Resume happens when basic_rom is mapped
+                    mia_set_rom_ram_enable(false,true);         //Setup address for device ROM
+                    MIA_MAP_PIO->ctrl = saved_map_sm_enables;
+                    MIA_ROM_READ_PIO->ctrl = saved_read_sm_enables;
+                }else{
                     mia_set_rom_ram_enable(true,false);
+                }
                 //Returns control with api_return_boot() when ROM has loaded
                 printf("Fast boot ON\n");
             }else{
