@@ -9,7 +9,7 @@
 #include "mia.pio.h"
 
 //MUST be updated if PIO is changed
-#define ADJ_MAP_INSTR  (5)
+#define ADJ_MAP_INSTR  (7)
 #define ADJ_ACTR_INSTR (2)
 #define ADJ_ACTW_INSTR (11)
 #define ADJ_ADDR_INSTR (8)
@@ -20,7 +20,8 @@ uint8_t adj_map_delay(uint8_t delay)
 {
     delay &= 0x1f;
     printf("MAP tune %d\n",delay);
-    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + ADJ_MAP_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
+    //MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + ADJ_MAP_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
+    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + ADJ_MAP_INSTR] = (uint16_t)(pio_encode_jmp_x_ne_y(mia_get_map_prg_offset()) | pio_encode_delay(delay));
     return delay;
 }
 

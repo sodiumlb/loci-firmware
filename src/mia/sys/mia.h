@@ -63,5 +63,6 @@ unsigned int mia_get_map_prg_offset(void);
 //Snoop flag for IRQ capture loop
 void mia_clear_snoop_flag(void);
 bool mia_get_snoop_flag(void);
+void mia_save_map_sm_enables(void);
 
 #endif /* _MIA_H_ */
