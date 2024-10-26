@@ -287,7 +287,7 @@ void ext_task(void)
 
                 //Set the MAP trap for programs using vectors in overlay ram
                 MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
-                MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM)) | (1u << MIA_ROM_READ_SM);
+                MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (1u << MIA_ROM_READ_SM);
     
                 //TODO store MAP PIO SM enables for returning later
                 /*

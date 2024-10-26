@@ -505,8 +505,8 @@ void mia_write_buf(uint16_t addr)
 
 
 void mia_enable_overlay_ram(bool low_enable, bool high_enable){
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(low_enable) << MIA_MAP_SM1);
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(high_enable) << MIA_MAP_SM2);
+    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(low_enable) << MIA_MAP_SM1);
+    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(high_enable) << MIA_MAP_SM2);
 //    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM1, low_enable);
 //    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, high_enable);
 }
@@ -562,7 +562,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool overlay_ram){
 //Called by action loop, needs to be fast so using bare PIO accesses
 inline void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     //mia_set_rom_read_enable(device_rom || basic_rom); 
-    MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
+    MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
     //device rom loaded in bank2, basic rom loaded in bank3
     //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
     if(device_rom || basic_rom)
@@ -572,8 +572,8 @@ inline void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     //high bank overlay ram only enabled when device_rom is disabled
     //mia_enable_overlay_ram(overlay_ram, !device_rom && overlay_ram);
     bool overlay_ram = !basic_rom;
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(overlay_ram) << MIA_MAP_SM1);
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
+    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(overlay_ram) << MIA_MAP_SM1);
+    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
 }
 
 static inline uint32_t wait_act_data(void){
