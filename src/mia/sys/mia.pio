@@ -141,7 +141,7 @@ ismap:
 
 .wrap_target
     wait 0 gpio 25 [30] ;wait for phi2 falling edge
-    nop            [10] ;need ca 50 cycles delay
+    nop            [20] ;need ca 50 cycles delay
     mov osr pins        ;sample data D[6:0]
     out null 3          ;drop D[2:0]
     out y 4             ;collect D[6:3]
