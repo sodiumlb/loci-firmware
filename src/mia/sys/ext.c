@@ -118,6 +118,9 @@ void ext_init(void)
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
+    gpio_set_drive_strength(SDA_PIN, GPIO_DRIVE_STRENGTH_2MA);
+    gpio_set_drive_strength(SCL_PIN, GPIO_DRIVE_STRENGTH_2MA);
+    
 
     {
         uint8_t txdata[] = { I2C_IOEXP_REG_DIR, ext_port_dir };
