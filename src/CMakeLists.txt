@@ -66,7 +66,7 @@ target_compile_definitions(loci-firmware PRIVATE
     PICO_FLASH_SIZE_BYTES=16777216
     PICO_USE_STACK_GUARDS=1
     PICO_DEBUG_MALLOC=1
-    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=32
+    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
 )
 
 target_compile_options(loci-firmware PRIVATE
