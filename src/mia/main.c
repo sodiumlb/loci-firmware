@@ -338,6 +338,7 @@ bool main_active(void)
 
 int main(void)
 {
+    main_state = stopped;
     init();
 
     // Trigger main_reclock()
