@@ -49,6 +49,7 @@ static volatile bool reset_requested;
 static volatile bool snoop_flag;
 static volatile uint32_t saved_map_sm_enables;
 static volatile uint32_t saved_read_sm_enables;
+static uint32_t ula_trig_addr;
 
 void mia_clear_snoop_flag(void){
     snoop_flag = false;
@@ -377,7 +378,6 @@ void mia_task(void)
 
 void mia_main_task(){
     static uint32_t prev_io_errors = 0;
-    static uint8_t prev_vmode = 255;
 
     if(reset_requested){
         ext_put(EXT_RESET,true);
@@ -405,16 +405,6 @@ void mia_main_task(){
         }
         prev_io_errors = mia_io_errors;
     }
-    if(IOREGS(0x03BF) != prev_vmode){
-        prev_vmode = IOREGS(0x03BF);
-        printf("VMode %02x\n",prev_vmode);
-    }
-    /*
-    if(!(MIA_ULA_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ULA_SM)))){
-        uint32_t data = MIA_ULA_PIO->rxf[MIA_ULA_SM];
-        printf("VMode raw %02x\n",(uint8_t)(data & 0xff));
-    }
-    */
 }
 
 bool mia_print_error_message(void)
@@ -1254,6 +1244,7 @@ static void mia_ula_pio_init(void)
     channel_config_set_dreq(&mode_dma, pio_get_dreq(MIA_ULA_PIO, MIA_ULA_SM, false));
     channel_config_set_transfer_data_size(&mode_dma, DMA_SIZE_8);
     channel_config_set_read_increment(&mode_dma, false);
+    channel_config_set_write_increment(&mode_dma, false);
     channel_config_set_chain_to(&mode_dma, trig_chan);
 
     dma_channel_configure(
@@ -1264,17 +1255,18 @@ static void mia_ula_pio_init(void)
         1,
         true);
 
-    uint32_t trig_addr = &IOREGS(0x03BF);
+    ula_trig_addr = (uint32_t)&IOREGS(0x03BF);
     dma_channel_config trig_dma = dma_channel_get_default_config(mode_chan);
     //channel_config_set_high_priority(&mode_dma, true);
     //channel_config_set_dreq(&mode_dma, pio_get_dreq(MIA_ULA_PIO, MIA_ULA_SM, false));
     channel_config_set_read_increment(&trig_dma, false);
+    channel_config_set_write_increment(&trig_dma, false);
     channel_config_set_chain_to(&trig_dma, mode_chan);
     dma_channel_configure(
         trig_chan,
         &trig_dma,
         &dma_channel_hw_addr(mode_chan)->write_addr,     // dst
-        &trig_addr,                                     // src
+        &ula_trig_addr,                                  // src
         1,
         false);
 
