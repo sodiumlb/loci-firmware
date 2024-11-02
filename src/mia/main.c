@@ -97,7 +97,7 @@ void main_task(void)
 {
     tuh_task();
     cpu_task();
-    mia_task();
+    mia_main_task();
     //map_task();
     //aud_task();
     kbd_task();
@@ -119,6 +119,7 @@ static void task(void)
     ram_task();
     fil_task();
     rom_task();
+    mia_task();
     ext_task();
     ssd_task();
     dsk_task();

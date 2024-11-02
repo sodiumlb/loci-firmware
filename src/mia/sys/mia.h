@@ -20,6 +20,7 @@
 
 void mia_init(void);
 void mia_task(void);
+void mia_main_task(void);
 void mia_run();
 void mia_stop();
 void mia_reclock(uint16_t clkdiv_int, uint8_t clkdiv_frac);
