@@ -115,7 +115,7 @@ static enum {
     MIA_IDLE,
     MIA_LOADING_DEVROM,
     MIA_LOADING_BIOS,
-} mia_state;
+} mia_boot_state;
 
 
 void mia_run(void)
@@ -213,6 +213,7 @@ void mia_stop(void)
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
     action_state = action_state_idle;
+    mia_boot_state = MIA_IDLE;
     if (saved_reset_vec >= 0)
     {
         XRAMW(0xFFFC) = saved_reset_vec;
@@ -232,7 +233,7 @@ bool mia_active(void)
 
 bool mia_boot_active(void)
 {
-    return mia_state != MIA_IDLE;
+    return mia_boot_state != MIA_IDLE;
 }
 
 /* Basic CLOAD read byte patch
@@ -290,10 +291,10 @@ const uint8_t __in_flash() mia_read_bit_patch[] = {
 void mia_task(void)
 {
     bool rom_is_loading;
-    switch(mia_state){
+    switch(mia_boot_state){
         case MIA_LOADING_DEVROM:
             if(!rom_active()){
-                mia_state = MIA_LOADING_BIOS;
+                mia_boot_state = MIA_LOADING_BIOS;
                 if(mia_boot_settings & MIA_BOOTSET_B11){
                     rom_is_loading = rom_load("BASIC11",7);
                     if(!rom_is_loading)
@@ -322,7 +323,7 @@ void mia_task(void)
         case MIA_LOADING_BIOS:
             if(!rom_active()){
                 printf("BIOS loaded done\n");
-                mia_state = MIA_IDLE;
+                mia_boot_state = MIA_IDLE;
                 //Patch for TAP loading CLOAD
                 if(mia_boot_settings & MIA_BOOTSET_TAP){
                     if(mia_boot_settings & MIA_BOOTSET_B11){
@@ -1369,6 +1370,7 @@ void mia_init(void)
     }
    
     mia_boot_settings = 0;
+    mia_boot_state = MIA_IDLE;
 
     // the inits
     // Same PIO order matters for timing tuning
@@ -1423,7 +1425,7 @@ void mia_api_boot(void){
                 api_return_ax(0);
                 main_stop();
             }
-            mia_state = MIA_LOADING_DEVROM;
+            mia_boot_state = MIA_LOADING_DEVROM;
         }
     }else{
         if(!!(mia_boot_settings & MIA_BOOTSET_B11)){
@@ -1450,7 +1452,7 @@ void mia_api_boot(void){
                 api_return_ax(0);
                 main_stop();
             }
-            mia_state = MIA_LOADING_BIOS;
+            mia_boot_state = MIA_LOADING_BIOS;
         }
     }
 }
