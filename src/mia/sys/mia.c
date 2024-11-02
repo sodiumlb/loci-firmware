@@ -378,6 +378,11 @@ void mia_task(void)
 void mia_main_task(){
     static uint32_t prev_io_errors = 0;
     static uint8_t prev_vmode = 255;
+
+    if(reset_requested){
+        ext_put(EXT_RESET,true);
+        reset_requested = false;
+    }
     // check on watchdog unless we explicitly ended or errored
     if (mia_active() && action_result == -1)
     {
@@ -399,10 +404,6 @@ void mia_main_task(){
             printf("!IO error %ld\n", mia_io_errors);
         }
         prev_io_errors = mia_io_errors;
-    }
-    if(reset_requested){
-        ext_put(EXT_RESET,true);
-        reset_requested = false;
     }
     if(IOREGS(0x03BF) != prev_vmode){
         prev_vmode = IOREGS(0x03BF);
