@@ -289,25 +289,7 @@ const uint8_t __in_flash() mia_read_bit_patch[] = {
 
 void mia_task(void)
 {
-    static uint32_t prev_io_errors = 0;
     bool rom_is_loading;
-    static uint8_t prev_vmode = 255;
-    // check on watchdog unless we explicitly ended or errored
-    if (mia_active() && action_result == -1)
-    {
-        absolute_time_t now = get_absolute_time();
-        if (absolute_time_diff_us(now, action_watchdog_timer) < 0)
-        {
-            printf("****TIMEOUT****\n");
-            printf("%02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
-            IOREGS(0x03B0),IOREGS(0x03B1),IOREGS(0x03B2),IOREGS(0x03B3),
-            IOREGS(0x03B4),IOREGS(0x03B5),IOREGS(0x03B6),IOREGS(0x03B7),
-            IOREGS(0x03B8));
-            printf("%d-%d %s\n", rw_pos, rw_end, action_state == action_state_read ? "R" : "N");
-            action_result = -3;
-            main_stop();
-        }
-    }
     switch(mia_state){
         case MIA_LOADING_DEVROM:
             if(!rom_active()){
@@ -389,6 +371,27 @@ void mia_task(void)
             break;
         case MIA_IDLE:
             break;
+    }
+}
+
+void mia_main_task(){
+    static uint32_t prev_io_errors = 0;
+    static uint8_t prev_vmode = 255;
+    // check on watchdog unless we explicitly ended or errored
+    if (mia_active() && action_result == -1)
+    {
+        absolute_time_t now = get_absolute_time();
+        if (absolute_time_diff_us(now, action_watchdog_timer) < 0)
+        {
+            printf("****TIMEOUT****\n");
+            printf("%02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+            IOREGS(0x03B0),IOREGS(0x03B1),IOREGS(0x03B2),IOREGS(0x03B3),
+            IOREGS(0x03B4),IOREGS(0x03B5),IOREGS(0x03B6),IOREGS(0x03B7),
+            IOREGS(0x03B8));
+            printf("%d-%d %s\n", rw_pos, rw_end, action_state == action_state_read ? "R" : "N");
+            action_result = -3;
+            main_stop();
+        }
     }
     if(mia_io_errors != prev_io_errors){
         if(mia_io_errors > 0){
