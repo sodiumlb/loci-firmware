@@ -121,11 +121,18 @@ void ext_init(void)
     gpio_set_drive_strength(SDA_PIN, GPIO_DRIVE_STRENGTH_2MA);
     gpio_set_drive_strength(SCL_PIN, GPIO_DRIVE_STRENGTH_2MA);
     
-
-    {
-        uint8_t txdata[] = { I2C_IOEXP_REG_DIR, ext_port_dir };
-        i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
-    }
+    uint8_t rxdata;
+    do{
+        {
+            uint8_t txdata[] = { I2C_IOEXP_REG_DIR, ext_port_dir };
+            i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
+        }
+        {    
+            uint8_t txdata[] = { I2C_IOEXP_REG_DIR };
+            i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
+            i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &rxdata, 1, false);
+        }
+    }while(rxdata != ext_port_dir);
 #ifdef I2C_IOEXP_REG_INV
     {
         uint8_t txdata[] = { I2C_IOEXP_REG_INV, I2C_IOEXP_INV };
