@@ -2,6 +2,9 @@
 
 This is the firmware source for the Oric LOCI, a modern storage emulation device for the Oric range of 8-bit computers like Oric-1 and Oric Atmos. It is based on Rumbledethumps' Picocomputer 6502 (RP6502) https://picocomputer.github.io/ but uses the Oric computers for the 6502 and video side of the project. Further the RIA has been adopted to interface with the Oric expansion bus and emulate floppy drives and tape loading images, making it a MIA (Media Interface Adapter)
 
+## Users
+For information on how to use a LOCI device, please refer to the [LOCI User Manual](https://github.com/sodiumlb/loci-hardware/wiki/LOCI-User-Manual)
+
 ## Dev Setup
 
 This is only for building the LOCI firmware.
