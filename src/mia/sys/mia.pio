@@ -80,8 +80,7 @@ start:
     wait 1 gpio 25      [6]  ;wait for phi2 raising edge
     jmp pin start            ;RnW inverted. Pass on Read
     mov osr pins
-    out null 6
-    out y 2
+    out y 2                  ;collect A[15:14]
     jmp x!=y start           ;pass if y=3 
     out null 9               ;spool out RnW,D[7:0]
     out y 3                  ;collect MAP,DIR,Phi2

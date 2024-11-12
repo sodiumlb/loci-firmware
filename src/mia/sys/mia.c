@@ -534,7 +534,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-static inline uint32_t wait_act_data(void){
+inline __attribute__((always_inline)) uint32_t wait_act_data(void){
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -560,11 +560,13 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
 
+            /*
             //Track errors and stop processing if address is wrong (0x03xx)
             if((rw_data_addr & 0x0000FF00) != 0x00000300){
                 mia_io_errors++;
                 continue;
             }
+            */
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
                 if((mia_iopage_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F))){
                     (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
@@ -588,27 +590,27 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         break;
                     //Microdisc Device Write Registers
                     case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
-                        data = wait_act_data();
                         dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
                         IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
+                        data = wait_act_data();
                         dsk_act(data);              //Process command
                         break;
                     case CASE_WRITE(DSK_IO_DATA):
-                        data = wait_act_data();
                         dsk_reg_status &= 0b11111101;
-                        IOREGS(DSK_IO_DATA) = data;
                         IOREGS(DSK_IO_CMD) = dsk_reg_status;
                         IOREGS(DSK_IO_DRQ) = 0x80;
+                        data = wait_act_data();
+                        IOREGS(DSK_IO_DATA) = data;
                         dsk_rw(true, data);
                         break;
                     case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
+                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
                         data = wait_act_data();
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
                         //[1] 0:basic rom disabled
-                        mia_set_rom_ram_enable(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
+                        mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
                         dsk_set_ctrl(data); //Handling of DSK related bits
-                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
                         break;
                     //ACIA Device Write Registers 0x380-0x383
                     case CASE_WRITE(ACIA_IO_DATA):
@@ -616,7 +618,7 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         acia_write(data);
                         break;
                     case CASE_WRITE(ACIA_IO_STAT):
-                        data = wait_act_data();
+                        //data = wait_act_data();
                         acia_reset(false);
                         break;
                     case CASE_WRITE(ACIA_IO_CMD):
@@ -1133,7 +1135,7 @@ static void mia_rom_read_pio_init(void)
     // PIO to manage 6502 reads to Oric ROM area 0xC000-0xFFFF
     uint offset = pio_add_program(MIA_ROM_READ_PIO, &mia_rom_read_program);
     pio_sm_config config = mia_rom_read_program_get_default_config(offset);
-    sm_config_set_in_pins(&config, A8_PIN);
+    sm_config_set_in_pins(&config, A14_PIN);
     sm_config_set_in_shift(&config, false, false, 0);
     sm_config_set_out_pins(&config, D_PIN_BASE, 8);
     sm_config_set_set_pins(&config, DIR_PIN, 1);
@@ -1146,7 +1148,8 @@ static void mia_rom_read_pio_init(void)
     //    pio_gpio_init(MIA_ROM_READ_PIO, i);
     pio_sm_init(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, offset, &config);
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, ((0xC000 >> 14) << 4) | 0b0110 );    //ROM 16kB at 0xC000 + MAP,DIR,Phi2,RW match
-    pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0x03 );    //Constant for multiple matching
+    //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0x03 );    //Constant for multiple matching
+    pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0xFF );    //Constant for multiple matching - start as off
     pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM, pio_encode_mov(pio_x, pio_osr));
     //pio_sm_init(MIA_ROM_READ_PIO, MIA_ROM_READ_SM2, offset, &config);
@@ -1175,18 +1178,20 @@ static void mia_map_pio_init(void)
     //pio_gpio_init(MIA_MAP_PIO, MAP_PIN);
     pio_sm_init(MIA_MAP_PIO, MIA_MAP_SM1, offset, &config);
     pio_sm_set_consecutive_pindirs(MIA_MAP_PIO, MIA_MAP_SM1, MAP_PIN, 1, true);
-    pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM1, 0xC000 >> 13);    //Overlay RAM 8kB at 0xC000
+    //pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM1, 0xC000 >> 13);    //Overlay RAM 8kB at 0xC000
+    pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM1, 0xFF);    //Overlay RAM 8kB at 0xC000 - start as off
     pio_sm_exec_wait_blocking(MIA_MAP_PIO, MIA_MAP_SM1, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(MIA_MAP_PIO, MIA_MAP_SM1, pio_encode_mov(pio_x, pio_osr));
     pio_sm_init(MIA_MAP_PIO, MIA_MAP_SM2, offset, &config);
-    pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM2, 0xE000 >> 13);    //Overlay RAM 8kB at 0xE000
+    //pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM2, 0xE000 >> 13);    //Overlay RAM 8kB at 0xE000
+    pio_sm_put(MIA_MAP_PIO, MIA_MAP_SM2, 0xFF);    //Overlay RAM 8kB at 0xE000 - start as off
     pio_sm_exec_wait_blocking(MIA_MAP_PIO, MIA_MAP_SM2, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(MIA_MAP_PIO, MIA_MAP_SM2, pio_encode_mov(pio_x, pio_osr));
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0x0310 >> 4);
     //pio_sm_exec_wait_blocking(MIA_WRITE_PIO, MIA_WRITE_SM, pio_encode_pull(false, true));
     //pio_sm_exec_wait_blocking(MIA_WRITE_PIO, MIA_WRITE_SM, pio_encode_mov(pio_y, pio_osr));
-    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM1, false);
-    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, false);   
+    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM1, true);
+    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, true);   
 }
 
 static uint mia_ula_prg_offset;
@@ -1382,6 +1387,7 @@ void mia_api_boot(void){
                 }else{
                     mia_set_rom_ram_enable(true,false);
                 }
+                */
                 //Returns control with api_return_boot() when ROM has loaded
                 printf("Fast boot ON\n");
             }else{
