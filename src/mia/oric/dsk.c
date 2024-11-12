@@ -393,11 +393,6 @@ void dsk_task(void){
     static uint8_t dsk_next_track = 0;
     static uint32_t dsk_rw_countdown;
 
-    if(dsk_irq_enable && dsk_reg_irq == 0x00){     //Slow IO signal, just toggle it - fingers crossed
-        ext_pulse(EXT_IRQ);
-        //printf("[irq %d]",dsk_state);
-    }
-
     switch(dsk_state){
         case DSK_IDLE:
         /*
@@ -554,6 +549,12 @@ void dsk_task(void){
     }
     IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
     IOREGS(DSK_IO_CTRL) = dsk_reg_irq;      //Not directly mapped due to combined with CTRL
+
+    if(dsk_irq_enable && dsk_reg_irq == 0x00){     //Slow IO signal, just toggle it - fingers crossed
+        ext_pulse(EXT_IRQ);
+        //printf("[irq %d]",dsk_state);
+    }
+
 }
 
 //Stop activity but keep mounts
