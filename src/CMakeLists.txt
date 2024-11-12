@@ -67,6 +67,7 @@ target_compile_definitions(loci-firmware PRIVATE
     PICO_USE_STACK_GUARDS=1
     PICO_DEBUG_MALLOC=1
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
+    PICO_CLOCK_AJDUST_PERI_CLOCK_WITH_SYS_CLOCK=1
 )
 
 target_compile_options(loci-firmware PRIVATE
