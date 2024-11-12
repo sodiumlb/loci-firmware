@@ -14,6 +14,7 @@
 #include "mon/rom.h"
 #include "sys/cfg.h"
 #include "sys/com.h"
+#include "sys/lfs.h"
 #include "sys/mem.h"
 #include "sys/mia.h"
 #include "sys/ssd.h"

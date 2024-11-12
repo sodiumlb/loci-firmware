@@ -123,6 +123,7 @@ void dsk_umount(uint8_t drive){
     if(dsk_drives[drive].type == FAT){
         f_close(dsk_drives[drive].fat_file);
     }else if(dsk_drives[drive].type == LFS){
+        lfs_free_file_config(dsk_drives[drive].lfs_file);
         lfs_file_close(&lfs_volume, dsk_drives[drive].lfs_file);
     }
     dsk_drives[drive].type = EMPTY;

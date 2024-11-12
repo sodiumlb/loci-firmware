@@ -30,7 +30,6 @@ static bool rom_FFFD;
 static bool is_reading_fat;
 static bool lfs_file_open;
 static lfs_file_t lfs_file;
-static LFS_FILE_CONFIG(lfs_file_config);
 static FIL fat_fil;
 
 static size_t rom_gets(void)
@@ -70,7 +69,7 @@ static bool rom_open(const char *name, bool is_fat)
     else
     {
         int lfsresult = lfs_file_opencfg(&lfs_volume, &lfs_file, name,
-                                         LFS_O_RDONLY, &lfs_file_config);
+                                         LFS_O_RDONLY, lfs_alloc_file_config());
         if (lfsresult < 0)
         {
             printf("?Unable to lfs_file_opencfg (%d)\n", lfsresult);
@@ -270,7 +269,7 @@ void rom_mon_install(const char *args, size_t len)
     }
     int lfsresult = lfs_file_opencfg(&lfs_volume, &lfs_file, lfs_name,
                                      LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL,
-                                     &lfs_file_config);
+                                     lfs_alloc_file_config());
     if (lfsresult < 0)
     {
         if (lfsresult == LFS_ERR_EXIST)
@@ -300,7 +299,7 @@ void rom_mon_install(const char *args, size_t len)
             break;
     }
     //printf("XX before lfs_file_close\n");
-
+    lfs_free_file_config(&lfs_file);
     int lfscloseresult = lfs_file_close(&lfs_volume, &lfs_file);
     lfs_file_open = false;
     if (lfscloseresult < 0)
@@ -368,9 +367,10 @@ bool rom_load_raw(const char *name, uint16_t addr)
         struct lfs_info info;
         if (lfs_stat(&lfs_volume, name, &info) < 0)
             return false;
-        if(lfs_file_opencfg(&lfs_volume, &lfs_file, name, LFS_O_RDONLY, &lfs_file_config) < 0)
+        if(lfs_file_opencfg(&lfs_volume, &lfs_file, name, LFS_O_RDONLY, lfs_alloc_file_config()) < 0)
             return false;
         lfs_file_read(&lfs_volume, &lfs_file, &xram[addr], 0x10000-addr);
+        lfs_free_file_config(&lfs_file);
         if(lfs_file_close(&lfs_volume, &lfs_file) < 0)
             return false;
         return true;            
@@ -475,6 +475,7 @@ void rom_task(void)
 
     if (rom_state == ROM_IDLE && lfs_file_open)
     {
+        lfs_free_file_config(&lfs_file);
         int lfsresult = lfs_file_close(&lfs_volume, &lfs_file);
         lfs_file_open = false;
         if (lfsresult < 0)

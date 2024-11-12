@@ -38,6 +38,31 @@ static char lfs_prog_buffer[FLASH_PAGE_SIZE] __attribute__((aligned (4))) ;
 static char lfs_lookahead_buffer[LFS_LOOKAHEAD_SIZE] __attribute__((aligned (4))) ;
 static struct lfs_config cfg;
 
+#define LFS_MAX_FILE_CONFIGS 8
+struct lfs_file_config lfs_file_configs[LFS_MAX_FILE_CONFIGS];
+uint8_t lfs_file_config_buffers[LFS_MAX_FILE_CONFIGS][FLASH_PAGE_SIZE];
+static uint8_t lfs_file_config_busy[LFS_MAX_FILE_CONFIGS];
+
+struct lfs_file_config* lfs_alloc_file_config(void){
+    for(int i=0; i<LFS_MAX_FILE_CONFIGS; i++){
+        if(lfs_file_config_busy[i])
+            continue;
+        else{
+            lfs_file_config_busy[i] = 1;
+            return &lfs_file_configs[i];
+        }
+    }
+    return NULL;
+}
+void lfs_free_file_config(lfs_file_t *fp){
+    for(int i=0; i<LFS_MAX_FILE_CONFIGS; i++){
+        if(fp->cfg == &lfs_file_configs[i]){
+            lfs_file_config_busy[i] = 0;
+            return;
+        }
+    }
+}
+
 static int lfs_read(const struct lfs_config *c, lfs_block_t block,
                     lfs_off_t off, void *buffer, lfs_size_t size)
 {
@@ -96,6 +121,12 @@ void lfs_init(void)
         .prog_buffer = lfs_prog_buffer,
         .lookahead_buffer = lfs_lookahead_buffer,
     };
+
+    for(int i=0; i<LFS_MAX_FILE_CONFIGS; i++){
+        lfs_file_configs[i].buffer = &lfs_file_config_buffers[i];
+        lfs_file_config_busy[i] = 0;
+    }
+
     /*
 
     for(int i=0; i<LFS_DISK_BLOCKS; i++){

@@ -121,6 +121,7 @@ void tap_umount(void){
     tap_set_status(TAP_STAT_NOT_READY,true);
     switch(tap_drive.type){
         case LFS:
+            lfs_free_file_config(tap_drive.lfs_file);
             lfs_file_close(&lfs_volume, tap_drive.lfs_file);
             break;
         case FAT:

@@ -24,6 +24,12 @@ extern lfs_t lfs_volume;
         .buffer = _LFS_FILE_CONFIG_NAME(name),            \
     };
 
+// Use this to allocate, use and free lfs_file_config from the central pool
+#define LFS_MAX_FILE_CONFIGS 8
+extern struct lfs_file_config lfs_file_configs[LFS_MAX_FILE_CONFIGS];
+struct lfs_file_config* lfs_alloc_file_config(void);
+void lfs_free_file_config(lfs_file_t *fp);
+
 /* Kernel events
  */
 

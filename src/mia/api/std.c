@@ -20,8 +20,7 @@ FIL std_fil[STD_FIL_MAX];
 #define STD_LFS_MAX 2
 bool lfs_isopen[STD_LFS_MAX] = {false};
 lfs_file_t lfs_fil[STD_LFS_MAX];
-uint8_t lfs_config_buf[STD_LFS_MAX][FLASH_PAGE_SIZE];
-struct lfs_file_config lfs_configs[STD_LFS_MAX];
+
 #define STD_FIL_STDIN 0
 #define STD_FIL_STDOUT 1
 #define STD_FIL_STDERR 2
@@ -100,8 +99,7 @@ void std_api_open(void)
         if (fd == STD_LFS_MAX)
             return api_return_errno(API_EMFILE);
         lfs_file_t *fp = &lfs_fil[fd];
-        lfs_configs[fd].buffer = lfs_config_buf[fd];
-        int lfsresult = lfs_file_opencfg(&lfs_volume, fp, (char*)path, mode, &lfs_configs[fd]);
+        int lfsresult = lfs_file_opencfg(&lfs_volume, fp, (char*)path, mode, lfs_alloc_file_config());
         if(lfsresult < 0)
             return (api_return_errno(API_ELFSFS(lfsresult)));
         lfs_isopen[fd] = true;
@@ -143,6 +141,7 @@ void std_api_close(void)
         return api_return_errno(API_EINVAL);
     if (fd >= STD_LFS_OFFS){
         lfs_file_t *fp = &lfs_fil[fd-STD_LFS_OFFS];
+        lfs_free_file_config(fp);
         int lfsresult = lfs_file_close(&lfs_volume, fp);
         if (lfsresult < 0)
             return api_return_ax(API_ELFSFS(lfsresult));
@@ -482,6 +481,8 @@ void std_stop(void)
         if (std_fil[i].obj.fs)
             f_close(&std_fil[i]);
     for (int i = 0; i < STD_LFS_MAX; i++)
-        if (lfs_isopen[i])
+        if (lfs_isopen[i]){
+            lfs_free_file_config(&lfs_fil[i]);
             lfs_file_close(&lfs_volume, &lfs_fil[i]);
+        }
 }
