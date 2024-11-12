@@ -52,7 +52,7 @@ isrom:
     out pindirs 8            ;disable data output
     set pins 1           [6]
     mov isr x           [14] ; ROM page cortex base address
-    nop                  [0] ;<- read addr timing adjust 0-14 (0-7 + 0-7)
+    nop                  [0] ;<- read addr timing adjust 0-31
     jmp pin isrom            ; Test A[15] 0=IO 1=ROM
 .wrap
 
@@ -62,7 +62,7 @@ isrom:
 .wrap_target
 start:
     irq wait 5               ;wait on CPU signaling 
-    mov osr !null            ;prepare indirs
+    mov osr !null            ;prepare pindirs
     wait 1 gpio 25       [7] ;wait for phi2 raising edge
     nop                  [0] ;<-io read timing adjust 0-7
     set pins 0
