@@ -27,16 +27,6 @@ typedef enum _mnt_status {
 
 mnt_status_t mnt_status[MNT_FD_MAX] = { 0 };
 
-//TODO Very costly buffer. Relocate?
-uint8_t mnt_lfs_buffer[MNT_FD_MAX][FLASH_PAGE_SIZE];
-struct lfs_file_config mnt_lfs_configs[MNT_FD_MAX] = {
-    { .buffer = mnt_lfs_buffer[0]},
-    { .buffer = mnt_lfs_buffer[1]},
-    { .buffer = mnt_lfs_buffer[2]},
-    { .buffer = mnt_lfs_buffer[3]},
-    { .buffer = mnt_lfs_buffer[4]},
-};
-
 /* Kernel events
  */
 
@@ -51,7 +41,7 @@ uint8_t mnt_mount(uint8_t drive, char *path){
     }
     if(path[0]=='0'){   //LFS mount for path starting"0:"
         //Todo attribute check RO
-        lfs_file_opencfg(&lfs_volume, &mnt_fd_lfs[drive], &path[2], LFS_O_RDWR, & mnt_lfs_configs[drive]);
+        lfs_file_opencfg(&lfs_volume, &mnt_fd_lfs[drive], &path[2], LFS_O_RDWR, lfs_alloc_file_config());
         if(drive == 4){
             tap_mount_lfs(&mnt_fd_lfs[4]);
         }else{
