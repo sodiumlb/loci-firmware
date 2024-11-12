@@ -695,6 +695,7 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         }
                         break;
                     case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
+                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
                         data = wait_act_data();
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
@@ -711,7 +712,7 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         acia_write(data);
                         break;
                     case CASE_WRITE(ACIA_IO_STAT):
-                        data = wait_act_data();
+                        //data = wait_act_data();
                         acia_reset(false);
                         break;
                     case CASE_WRITE(ACIA_IO_CMD):
