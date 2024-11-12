@@ -135,18 +135,20 @@ ismap:
 ;    push noblock        ;Data to FIFO
 ;.wrap
 
-; Snooping ULA first read cycle for mode status
-; 0x18>>3 in X
+; Snooping ULA first read phase
+; 4 bytes pattern in X, returns 5th byte (1st after) match
+; Need between 20 and 60 cycles delay after phi2
 .program mia_ula
 
 .wrap_target
-    wait 0 gpio 25 [30] ;wait for phi2 falling edge
-    nop            [20] ;need ca 50 cycles delay
-    mov osr pins        ;sample data D[6:0]
-    out null 3          ;drop D[2:0]
-    out y 4             ;collect D[6:3]
-    jmp x!=y skip       ;skip if not mode attribute (0x18)
-    in pins 8           ;autopush D[7:0]
 skip:
-    wait 1 gpio 25 [31] ;wait for phi2 raising edge
+    wait 1 gpio 25 [20] ;wait for phi2 raising edge
+    wait 0 gpio 25 [30] ;wait for phi2 falling edge
+    nop            [10] ;<-ULA timing adjuts (0-31) 
+    pull noblock        ;Update pattern if available
+    mov x osr           ;Pattern in x
+    mov y isr           ;Copy all bytes to y
+    in pins 8           ;Shift next byte in
+    jmp x!=y skip       ;Match last 4 bytes with pattern
+    push noblock        ;Push/trigger if match
 .wrap

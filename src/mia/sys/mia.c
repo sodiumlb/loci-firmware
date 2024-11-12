@@ -47,8 +47,8 @@ static volatile int32_t rw_end;
 static volatile bool irq_enabled;
 static volatile bool reset_requested;
 static volatile bool snoop_flag;
-static volatile uint32_t saved_map_sm_enables;
-static volatile uint32_t saved_read_sm_enables;
+volatile bool map_flag_basic, map_flag_device;
+static bool saved_map_flag_basic, saved_map_flag_device;
 static uint32_t ula_trig_addr;
 
 void mia_clear_snoop_flag(void){
@@ -58,9 +58,9 @@ bool mia_get_snoop_flag(void){
     return snoop_flag;
 }
 
-void mia_save_map_sm_enables(void){
-    saved_map_sm_enables = MIA_MAP_PIO->ctrl & 0xf;
-    saved_read_sm_enables = MIA_ROM_READ_PIO->ctrl & 0xf;
+void mia_save_map_flags(void){
+    saved_map_flag_basic = map_flag_basic;
+    saved_map_flag_device = map_flag_device;
 }
 
 
@@ -96,20 +96,22 @@ static void mia_set_watch_address(uint32_t addr)
 {
     //pio_sm_put(RIA_ACT_PIO, RIA_ACT_SM, addr & 0x1F);
 }
-// The PIO will notify the action loop of all register writes.
-// Only every fourth register (0, 4, 8, ...) is watched for
-// read access. This additional read address to be watched
-// is varied based on the state of the RIA.
+
+//Using injection of PIO operations to enable and disable funtionality
+//PIO_OP_OFF = set x, 31
+#define PIO_OP_OFF 0xe03f
+//PIO_OP_ON_3 = set x, 3
+#define PIO_OP_ON_3 0xe023
+//PIO_OP_ON_C = set x, C000>>13
+#define PIO_OP_ON_C 0xe026
+//PIO_OP_ON_E = set x, E000>>13
+#define PIO_OP_ON_E 0xe027
 void mia_set_rom_read_enable(bool enable)
 {
-    pio_sm_set_enabled(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, enable);
-    //pio_sm_set_enabled(MIA_ROM_READ_PIO, MIA_ROM_READ_SM2, enable);
-    /*
     if(enable)
-        pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0xFFFFFFFF);
+        MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = PIO_OP_ON_3;
     else
-        pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0x00000000);
-    */
+        MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = PIO_OP_OFF;
 }
 
 static enum {
@@ -128,7 +130,9 @@ void mia_run(void)
     //ext_set_dir(EXT_ROMDIS,true);
     //mia_set_rom_read_enable(true);
     //mia_set_rom_ram_enable(true,false);
+    mia_set_rom_read_enable(true);
     mia_set_rom_ram_enable(!!(mia_boot_settings & MIA_BOOTSET_FDC),!(mia_boot_settings & MIA_BOOTSET_FDC));
+    
     //ext_put(EXT_OE,true);
     //ext_put(EXT_nRESET,true);
   
@@ -210,6 +214,7 @@ void mia_stop(void)
     ext_put(EXT_ROMDIS,false);
     //ext_set_dir(EXT_ROMDIS, false);
     ext_put(EXT_nOE,true);
+    mia_set_rom_read_enable(false);
     mia_set_rom_ram_enable(false,false);
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
@@ -357,11 +362,15 @@ void mia_task(void)
                 }
                 if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
                     if(!!(mia_boot_settings & MIA_BOOTSET_RESUME)){
-                        MIA_MAP_PIO->ctrl = saved_map_sm_enables;
+                        mia_set_rom_ram_enable(saved_map_flag_device,saved_map_flag_basic);
                         printf("Resuming\n");
                         __dsb();
                         api_return_resume();
                     }else{
+                        if(mia_boot_settings & MIA_BOOTSET_FDC)
+                            mia_set_rom_ram_enable(true,false);
+                        else
+                            mia_set_rom_ram_enable(false,true);
                         printf("Booting\n");
                         __dsb();
                         api_return_boot();
@@ -499,76 +508,30 @@ void mia_write_buf(uint16_t addr)
 }
 
 
-void mia_enable_overlay_ram(bool low_enable, bool high_enable){
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(low_enable) << MIA_MAP_SM1);
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(high_enable) << MIA_MAP_SM2);
-//    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM1, low_enable);
-//    pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, high_enable);
-}
-
-/*
-void mia_enable_rom(bool device_enable, bool bios_enable){
-    MIA_READ_PIO->ctrl = (MIA_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_enable || bios_enable) << MIA_ROM_READ_SM);
-//    MIA_READ_PIO->ctrl = (MIA_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM1)) | (bool_to_bit(bios_enable) << MIA_ROM_READ_SM1);
-//    MIA_READ_PIO->ctrl = (MIA_READ_PIO->ctrl & ~(1u << MIA_ROM_READ_SM2)) | (bool_to_bit(device_enable || bios_enable) << MIA_ROM_READ_SM2);
-//    pio_sm_set_enabled(MIA_READ_PIO, MIA_ROM_READ_SM1, bios_enable);
-//    pio_sm_set_enabled(MIA_READ_PIO, MIA_ROM_READ_SM2, device_enable || bios_enable);
-}
-*/
-
-/* TODO Evaluate how risky runtime change of ROM address is */
-
-void mia_set_rom_addr(uintptr_t addr){
-    //pio_sm_put_blocking(MIA_READ_PIO, MIA_READ_ADDR_SM, addr >> 14);
-    MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = addr >> 14;
-    /*
-    uint16_t pull_instr = pio_encode_pull(false, true);
-    uint16_t mov_instr = pio_encode_mov(pio_y, pio_osr);
-    uint16_t out_instr = pio_encode_out(pio_null, 32);
-    while(!(MIA_READ_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_READ_SM)))){
-    //    //tight waiting loop till FIFO is empty
-    }
-    MIA_READ_PIO->ctrl = (MIA_READ_PIO->ctrl & ~(1u << MIA_READ_SM)) | (bool_to_bit(false) << MIA_READ_SM);
-    pio_sm_put_blocking(MIA_READ_PIO, MIA_READ_SM, addr >> 14);
-    pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_READ_SM, pull_instr);
-    pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_READ_SM, mov_instr);
-    pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_READ_SM, out_instr);
-    MIA_READ_PIO->ctrl = (MIA_READ_PIO->ctrl & ~(1u << MIA_READ_SM)) | (bool_to_bit(true) << MIA_READ_SM);
-    */
-}
-
-//bool mia_overlay_ram_enabled = false;
-//bool mia_device_rom_enabled = false;
-/*
-void mia_set_rom_ram_enable(bool device_rom, bool overlay_ram){
-    //if(device_rom != mia_device_rom_enabled)
-    mia_set_rom_addr(device_rom ? (uintptr_t)oric_bank2 : (uintptr_t)oric_bank3);
-
-    //bios rom enabled only when overlay ram is disabled
-    //mia_enable_rom(device_rom, !overlay_ram); 
-    mia_set_rom_read_enable(device_rom || !overlay_ram); 
-    //mia_device_rom_enabled = device_rom;
-
-    //high bank overlay ram only enabled when device_rom is disabled
-    mia_enable_overlay_ram(overlay_ram, !device_rom && overlay_ram);
-    //mia_overlay_ram_enabled = overlay_ram;
-}
-*/
 //Called by action loop, needs to be fast so using bare PIO accesses
-inline void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
+inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
     //mia_set_rom_read_enable(device_rom || basic_rom); 
-    MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
-    //device rom loaded in bank2, basic rom loaded in bank3
-    //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
-    if(device_rom || basic_rom)
-        //MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2) >> 14;
-        MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)(0x2000C000 >> 14) : (uintptr_t)(0x20008000 >> 14));
+    //MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
+    //MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = (device_rom || basic_rom) ? PIO_OP_ON_3 : PIO_OP_OFF;
     
     //high bank overlay ram only enabled when device_rom is disabled
     //mia_enable_overlay_ram(overlay_ram, !device_rom && overlay_ram);
     bool overlay_ram = !basic_rom;
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(overlay_ram) << MIA_MAP_SM1);
-    MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
+    //MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM1)) | (bool_to_bit(overlay_ram) << MIA_MAP_SM1);
+    //MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
+    MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = ( (overlay_ram) ? PIO_OP_ON_C : PIO_OP_OFF );
+    MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = ( (!device_rom && overlay_ram) ? PIO_OP_ON_E : PIO_OP_OFF );
+    
+    //device rom loaded in bank2, basic rom loaded in bank3
+    //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
+        //MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2) >> 14;
+    MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)(0x2000C000 >> 14) : (uintptr_t)(0x20008000 >> 14));    
+
+    map_flag_basic = basic_rom;
+    map_flag_device = device_rom;
+}
+void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
+    mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
 static inline uint32_t wait_act_data(void){
@@ -722,6 +685,11 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         MIA_RW1 = xram[MIA_ADDR1];
                         MIA_ADDR0 += MIA_STEP0;
                         MIA_RW0 = xram[MIA_ADDR0];
+                        break;
+                    case CASE_WRITE(0x03A3): // ULA pattern match
+                        data = wait_act_data();
+                        MIA_ULA_PIO->txf[MIA_ULA_SM] = 0x83848500 | data;
+                        IOREGS(0x03A3) = 0x00;
                         break;
                     case CASE_WRITE(0x03A1): // UART Tx
                         data = wait_act_data();
@@ -1185,9 +1153,7 @@ static void mia_rom_read_pio_init(void)
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM2, 0xE000 >> 13);    //ROM 8kB at 0xE000
     //pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM2, pio_encode_pull(false, true));
     //pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM2, pio_encode_mov(pio_x, pio_osr));
-    //pio_sm_set_enabled(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, true);
-    mia_set_rom_read_enable(false);
-
+    pio_sm_set_enabled(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, true);
 }
 
 static uint mia_map_prg_offset;
@@ -1223,17 +1189,23 @@ static void mia_map_pio_init(void)
     pio_sm_set_enabled(MIA_MAP_PIO, MIA_MAP_SM2, false);   
 }
 
+static uint mia_ula_prg_offset;
+uint mia_get_ula_prg_offset(void){
+    return mia_ula_prg_offset;}
+
 static void mia_ula_pio_init(void)
 {
     // PIO to manage ULA mode snooping
     uint offset = pio_add_program(MIA_ULA_PIO, &mia_ula_program);
+    mia_ula_prg_offset = offset;
     pio_sm_config config = mia_ula_program_get_default_config(offset);
     sm_config_set_in_pins(&config, D_PIN_BASE);
-    sm_config_set_in_shift(&config, false, true, 8);
+    sm_config_set_in_shift(&config, false, false, 0);
     pio_sm_init(MIA_ULA_PIO, MIA_ULA_SM, offset, &config);
-    pio_sm_put(MIA_ULA_PIO, MIA_ULA_SM, 0x18 >> 3);    //Match with mode change Oric ULA screen attributes
+    pio_sm_put(MIA_ULA_PIO, MIA_ULA_SM, 0x83848586);    //Pattern to match - 4 ink changes in a row
     pio_sm_exec_wait_blocking(MIA_ULA_PIO, MIA_ULA_SM, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(MIA_ULA_PIO, MIA_ULA_SM, pio_encode_mov(pio_x, pio_osr));
+    //pio_sm_exec_wait_blocking(MIA_ULA_PIO, MIA_ULA_SM, pio_encode_set(pio_x, 0x18 >>3 ));
     pio_sm_set_enabled(MIA_ULA_PIO, MIA_ULA_SM, true);
 
     int mode_chan = dma_claim_unused_channel(true);
@@ -1250,15 +1222,14 @@ static void mia_ula_pio_init(void)
     dma_channel_configure(
         mode_chan,
         &mode_dma,
-        &IOREGS(0x03BF),                    // dst
+        &IOREGS(0x03A3),                    // dst
         &MIA_ULA_PIO->rxf[MIA_ULA_SM],      // src
-        1,
+        0xFFFFFFFF,                         // max
         true);
 
-    ula_trig_addr = (uint32_t)&IOREGS(0x03BF);
-    dma_channel_config trig_dma = dma_channel_get_default_config(mode_chan);
-    //channel_config_set_high_priority(&mode_dma, true);
-    //channel_config_set_dreq(&mode_dma, pio_get_dreq(MIA_ULA_PIO, MIA_ULA_SM, false));
+    ula_trig_addr = (uint32_t)&IOREGS(0x03A3);
+    dma_channel_config trig_dma = dma_channel_get_default_config(trig_chan);
+    //channel_config_set_high_priority(&trig_dma, true);
     channel_config_set_read_increment(&trig_dma, false);
     channel_config_set_write_increment(&trig_dma, false);
     channel_config_set_chain_to(&trig_dma, mode_chan);
@@ -1405,10 +1376,9 @@ void mia_api_boot(void){
         }else{
             printf("DEV ROM loaded ok\n");
             if(mia_boot_settings & MIA_BOOTSET_FAST){
-                if((mia_boot_settings & MIA_BOOTSET_RESUME)){    //Resume happens when basic_rom is mapped
-                    mia_set_rom_ram_enable(false,true);         //Setup address for device ROM
-                    MIA_MAP_PIO->ctrl = saved_map_sm_enables;
-                    MIA_ROM_READ_PIO->ctrl = saved_read_sm_enables;
+                /*
+                if((mia_boot_settings & MIA_BOOTSET_RESUME)){    
+                    mia_set_rom_ram_enable(saved_map_flag_device,saved_map_flag_basic);         //Setup address for device ROM
                 }else{
                     mia_set_rom_ram_enable(true,false);
                 }
@@ -1438,7 +1408,7 @@ void mia_api_boot(void){
         }else{
             printf("BASIC ROM loaded ok\n");
             if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
-                mia_set_rom_ram_enable(false,true);
+                //mia_set_rom_ram_enable(false,true);
                 //Returns control with api_return_boot() when ROM has loaded
                 printf("Fast boot ON\n");
             }else{

@@ -6,6 +6,7 @@
 
 #include "str.h"
 #include "api/oem.h"
+#include "sys/adj.h"
 #include "sys/cfg.h"
 #include "sys/cpu.h"
 #include "sys/lfs.h"
@@ -22,8 +23,9 @@
 // +TM10       | MAP signal timing 0-31
 // +TR0        | IO Read signal timing 0-31
 // +TW0        | IO Write signal timing 0-31
-// +TD0        | IO Data signal timing 0-7
-// +TA0        | ROM Read address signal timing 0-7
+// +TD0        | IO Data signal timing 0-31
+// +TA0        | ROM Read address signal timing 0-31
+// +TU0        | ULA snooping timing 0-31
 // BASIC       | Boot ROM - Must be last
 
 #define CFG_VERSION 2
@@ -34,20 +36,20 @@ static uint8_t cfg_reset_ms;
 static uint8_t cfg_caps;
 static uint32_t cfg_codepage;
 static uint8_t cfg_vga_display;
-static uint8_t cfg_map_delay;
+static uint8_t cfg_map_delay = 10;
 static uint8_t cfg_io_read_delay;
 static uint8_t cfg_io_write_delay;
 static uint8_t cfg_io_data_delay;
 static uint8_t cfg_read_addr_delay;
+static uint8_t cfg_ula_delay = 10;
 
 // Optional string can replace boot string
 static void cfg_save_with_boot_opt(char *opt_str)
 {
     lfs_file_t lfs_file;
-    LFS_FILE_CONFIG(lfs_file_config);
     int lfsresult = lfs_file_opencfg(&lfs_volume, &lfs_file, filename,
                                      LFS_O_RDWR | LFS_O_CREAT,
-                                     &lfs_file_config);
+                                     lfs_alloc_file_config());
     if (lfsresult < 0)
     {
         printf("?Unable to lfs_file_opencfg %s for writing (%d)\n", filename, lfsresult);
@@ -82,6 +84,7 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                "+TW%d\n"
                                "+TD%d\n"
                                "+TA%d\n"
+                               "+TU%d\n"
                                "%s",
                                CFG_VERSION,
                                cfg_phi2_khz,
@@ -94,10 +97,12 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                cfg_io_write_delay,
                                cfg_io_data_delay,
                                cfg_read_addr_delay,
+                               cfg_ula_delay,
                                opt_str);
         if (lfsresult < 0)
             printf("?Unable to write %s contents (%d)\n", filename, lfsresult);
     }
+    lfs_free_file_config(&lfs_file);
     int lfscloseresult = lfs_file_close(&lfs_volume, &lfs_file);
     if (lfscloseresult < 0)
         printf("?Unable to lfs_file_close %s (%d)\n", filename, lfscloseresult);
@@ -110,7 +115,7 @@ static void cfg_load_with_boot_opt(bool boot_only)
     lfs_file_t lfs_file;
     LFS_FILE_CONFIG(lfs_file_config);
     int lfsresult = lfs_file_opencfg(&lfs_volume, &lfs_file, filename,
-                                     LFS_O_RDONLY, &lfs_file_config);
+                                     LFS_O_RDONLY, lfs_alloc_file_config());
     mbuf[0] = 0;
     if (lfsresult < 0)
     {
@@ -170,11 +175,14 @@ static void cfg_load_with_boot_opt(bool boot_only)
             case 'A':
                 cfg_read_addr_delay = val;
                 break;
+            case 'U':
+                cfg_ula_delay = val;
             default:
                 break;
             }
         }
     }
+    lfs_free_file_config(&lfs_file);
     lfsresult = lfs_file_close(&lfs_volume, &lfs_file);
     if (lfsresult < 0)
         printf("?Unable to lfs_file_close %s (%d)\n", filename, lfsresult);
@@ -337,7 +345,7 @@ uint8_t cfg_get_io_read_delay(void)
 bool cfg_set_io_data_delay(uint8_t delay)
 {
     bool ok = false;
-    if(delay <= 7){
+    if(delay <= 31){
         cfg_io_data_delay = delay;
         adj_io_data_delay(cfg_io_data_delay);
         ok = true;
@@ -354,7 +362,7 @@ uint8_t cfg_get_io_data_delay(void)
 bool cfg_set_read_addr_delay(uint8_t delay)
 {
     bool ok = false;
-    if(delay <= 14){
+    if(delay <= 31){
         cfg_read_addr_delay = delay;
         adj_read_addr_delay(cfg_read_addr_delay);
         ok = true;
@@ -366,4 +374,21 @@ bool cfg_set_read_addr_delay(uint8_t delay)
 uint8_t cfg_get_read_addr_delay(void)
 {
     return cfg_read_addr_delay;
+}
+
+bool cfg_set_ula_delay(uint8_t delay)
+{
+    bool ok = false;
+    if(delay <= 31){
+        cfg_ula_delay = delay;
+        adj_ula_delay(cfg_ula_delay);
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+    return ok;
+}
+
+uint8_t cfg_get_ula_delay(void)
+{
+    return cfg_ula_delay;
 }
