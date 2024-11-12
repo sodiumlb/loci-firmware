@@ -330,6 +330,7 @@ static struct
     {4, "tiow", set_io_write_delay},
     {4, "tiod", set_io_data_delay},
     {4, "tadr", set_read_addr_delay},
+    {4, "tula", set_ula_delay},
 };
 static const size_t SETTERS_COUNT = sizeof SETTERS / sizeof *SETTERS;
 
@@ -346,6 +347,7 @@ static void set_print_all(void)
     set_print_io_read_delay();
     set_print_io_data_delay();
     set_print_read_addr_delay();
+    set_print_ula_delay();
 }
 
 void set_mon_set(const char *args, size_t len)
