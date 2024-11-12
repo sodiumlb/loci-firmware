@@ -60,10 +60,11 @@ unsigned int mia_get_act_prg_offset(void);
 unsigned int mia_get_io_read_prg_offset(void);
 unsigned int mia_get_read_addr_prg_offset(void);
 unsigned int mia_get_map_prg_offset(void);
+unsigned int mia_get_ula_prg_offset(void);
 
 //Snoop flag for IRQ capture loop
 void mia_clear_snoop_flag(void);
 bool mia_get_snoop_flag(void);
-void mia_save_map_sm_enables(void);
+void mia_save_map_flags(void);
 
 #endif /* _MIA_H_ */

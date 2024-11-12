@@ -291,6 +291,27 @@ static void set_read_addr_delay(const char *args, size_t len)
     set_print_read_addr_delay();
 }
 
+static void set_print_ula_delay(void)
+{
+    printf("TULA: %d\n", cfg_get_ula_delay());
+}
+
+static void set_ula_delay(const char *args, size_t len)
+{
+    uint32_t delay;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &delay) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_ula_delay(delay);
+    }
+    set_print_ula_delay();    
+}
+
 typedef void (*set_function)(const char *, size_t);
 static struct
 {

@@ -14,6 +14,7 @@
 #define ADJ_ACTW_INSTR (11)
 #define ADJ_ADDR_INSTR (8)
 #define ADJ_IO_INSTR   (3)
+#define ADJ_ULA_INSTR  (2)
 
 
 uint8_t adj_map_delay(uint8_t delay)
@@ -57,6 +58,14 @@ uint8_t adj_io_data_delay(uint8_t delay)
     return delay;
 }
 
+uint8_t adj_ula_delay(uint8_t delay)
+{
+    delay &= 0x01f;
+    printf("ULA tune %d\n",delay);
+    MIA_ULA_PIO->instr_mem[mia_get_ula_prg_offset() + ADJ_ULA_INSTR] = (uint16_t)(pio_encode_nop() | pio_encode_delay(delay));
+    return delay;
+}
+
 void adj_init(void){
     //Set delays from cfg
     adj_map_delay(cfg_get_map_delay());
@@ -64,6 +73,7 @@ void adj_init(void){
     adj_io_read_delay(cfg_get_io_read_delay());
     adj_io_data_delay(cfg_get_io_data_delay());
     adj_read_addr_delay(cfg_get_read_addr_delay());
+    adj_ula_delay(cfg_get_ula_delay());
 }
 
 static enum {
