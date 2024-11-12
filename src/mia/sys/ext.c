@@ -62,6 +62,9 @@ static absolute_time_t ext_btn_holdtimer;
 static absolute_time_t ext_irq_capture_timeout;
 static bool ext_btn_hold_oneshot;
 
+static uint16_t ext_saved_vector_bas;
+static uint16_t ext_saved_vector_dev;
+
 static enum {
     EXT_IDLE,
     EXT_LOADING_BIOS,
@@ -250,9 +253,12 @@ void ext_task(void)
             if(mia_get_snoop_flag()){
                 printf("Loop hit!\n");
                 MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));  //Restore MAP pio program
-                mia_save_map_sm_enables();
+                mia_save_map_flags();
+                XRAMW(0xFFFE) = ext_saved_vector_bas;
+                XRAMW(0xBFFE) = ext_saved_vector_dev;
                 ext_boot_loci();
             }else if(absolute_time_diff_us(ext_irq_capture_timeout, get_absolute_time()) > 0){
+                MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));  //Restore MAP pio program
                 main_break();
                 ext_state = EXT_BOOT_LOCI;
             }
@@ -295,25 +301,31 @@ void ext_task(void)
             if(ext_btn_released(EXT_BTN_A)){
                 printf("IRQ trap on\n");
 
-                //Set the MAP trap for programs using vectors in overlay ram
-                MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
-                MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (1u << MIA_ROM_READ_SM);
-    
+   
                 //TODO store MAP PIO SM enables for returning later
                 /*
                     Create an IRQ trap. Jump to NMI vector when released. ROM save state routine waits there.
-                    03BA  50 FE     BVC -2    
-                    03BC  6C FA FF  JMP ($FFFA) 
+                    03BA  B8        CLV
+                    03BB  50 FE     BVC -2    
+                    03BD  6C FA FF  JMP ($FFFA) 
                 */
-                mia_clear_snoop_flag();
-                IOREGS(0x03BA) = 0x50;
-                IOREGS(0x03BB) = 0xFE;
-                IOREGS(0x03BC) = 0x6C;
-                IOREGS(0x03BD) = 0xFA;
-                IOREGS(0x03BE) = 0xFF;
+                IOREGS(0x03BA) = 0xB8;
+                IOREGS(0x03BB) = 0x50;
+                IOREGS(0x03BC) = 0xFE;
+                IOREGS(0x03BD) = 0x6C;
+                IOREGS(0x03BE) = 0xFA;
+                IOREGS(0x03BF) = 0xFF;
                 //XRAMW(0xFFFC) = 0x03BB;
-                XRAMW(0xFFFE) = 0x03BA;             //Enable IRQ trap
-                XRAMW(0xBFFE) = 0x03BA;
+                ext_saved_vector_bas = XRAMW(0xFFFE);
+                ext_saved_vector_dev = XRAMW(0xBFFE);
+                XRAMW(0xFFFE) = 0x03BA;             //Enable IRQ trap in Basic ROM
+                XRAMW(0xBFFE) = 0x03BA;             //..and Device ROM
+
+                mia_clear_snoop_flag();
+                //Set the MAP trap for programs using vectors in overlay ram
+                MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
+                //IA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (1u << MIA_ROM_READ_SM);
+
                 ext_pulse(EXT_IRQ);
                 ext_state = EXT_CAPTURE_IRQ;
                 ext_irq_capture_timeout = delayed_by_ms(get_absolute_time(), EXT_IRQ_CAPTURE_TIMEOUT_MS);
