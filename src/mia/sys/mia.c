@@ -24,6 +24,7 @@
 #include "littlefs/lfs_util.h"
 #include "oric/acia.h"
 #include "oric/dsk.h"
+#include "oric/rom.h"
 #include "oric/tap.h"
 
 #define MIA_WATCHDOG_MS 250
@@ -301,27 +302,30 @@ void mia_task(void)
         case MIA_LOADING_DEVROM:
             if(!rom_active()){
                 mia_boot_state = MIA_LOADING_BIOS;
-                if(mia_boot_settings & MIA_BOOTSET_B11){
-                    rom_is_loading = rom_load("BASIC11",7);
-                    if(!rom_is_loading)
-                        rom_is_loading = rom_load_raw("basic11.rom",0xC000);
-                    if(!rom_is_loading)
-                        rom_is_loading = rom_load_raw("basic11b.rom",0xC000);
+                rom_is_loading = rom_load_mounted();
+                if(!rom_is_loading){
+                    if(mia_boot_settings & MIA_BOOTSET_B11){
+                        rom_is_loading = rom_load("BASIC11",7);
+                        if(!rom_is_loading)
+                            rom_is_loading = rom_load_raw("basic11.rom",0xC000);
+                        if(!rom_is_loading)
+                            rom_is_loading = rom_load_raw("basic11b.rom",0xC000);
 
-                    //if(!rom_load("test108k",8)){
-                    if(!rom_is_loading){
-                        printf("!rom_load 11 failed\n");
+                        //if(!rom_load("test108k",8)){
+                        if(!rom_is_loading){
+                            printf("!rom_load 11 failed\n");
+                        }else{
+                            printf("BIOS loaded ok\n");
+                        }
                     }else{
-                        printf("BIOS loaded ok\n");
-                    }
-                }else{
-                    rom_is_loading = rom_load("BASIC10",7);
-                    if(!rom_is_loading)
-                        rom_is_loading = rom_load_raw("basic10.rom",0xC000);
-                    if(!rom_is_loading){
-                        printf("!rom_load 10 failed\n");
-                    }else{
-                        printf("BIOS loaded ok\n");
+                        rom_is_loading = rom_load("BASIC10",7);
+                        if(!rom_is_loading)
+                            rom_is_loading = rom_load_raw("basic10.rom",0xC000);
+                        if(!rom_is_loading){
+                            printf("!rom_load 10 failed\n");
+                        }else{
+                            printf("BIOS loaded ok\n");
+                        }
                     }
                 }
             }
@@ -331,7 +335,7 @@ void mia_task(void)
                 printf("BIOS loaded done\n");
                 mia_boot_state = MIA_IDLE;
                 //Patch for TAP loading CLOAD
-                if(mia_boot_settings & MIA_BOOTSET_TAP){
+                if(!rom_is_mounted() && (mia_boot_settings & MIA_BOOTSET_TAP)){
                     if(mia_boot_settings & MIA_BOOTSET_B11){
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
                             xram[SYNCH_PATCH_11_ADDR+i] = mia_synch_patch_11[i];
@@ -1397,16 +1401,19 @@ void mia_api_boot(void){
             mia_boot_state = MIA_LOADING_DEVROM;
         }
     }else{
-        if(!!(mia_boot_settings & MIA_BOOTSET_B11)){
-            rom_opened = rom_load("BASIC11",7);
-            if(!rom_opened)
-                rom_opened = rom_load_raw("basic11.rom",0xC000);
-            if(!rom_opened)
-                rom_opened = rom_load_raw("basic11b.rom",0xC000);
-        }else{
-            rom_opened = rom_load("BASIC10",7);
-            if(!rom_opened)
-                rom_opened = rom_load_raw("basic10.rom",0xC000);
+        rom_opened = rom_load_mounted();
+        if(!rom_opened){
+            if(!!(mia_boot_settings & MIA_BOOTSET_B11)){
+                rom_opened = rom_load("BASIC11",7);
+                if(!rom_opened)
+                    rom_opened = rom_load_raw("basic11.rom",0xC000);
+                if(!rom_opened)
+                    rom_opened = rom_load_raw("basic11b.rom",0xC000);
+            }else{
+                rom_opened = rom_load("BASIC10",7);
+                if(!rom_opened)
+                    rom_opened = rom_load_raw("basic10.rom",0xC000);
+            }
         }
         if(!rom_opened){
             printf("!rom_load basic failed\n");
