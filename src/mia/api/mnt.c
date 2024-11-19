@@ -7,13 +7,14 @@
 #include "api/api.h"
 #include "api/mnt.h"
 #include "oric/dsk.h"
+#include "oric/rom.h"
 #include "oric/tap.h"
 #include "fatfs/ff.h"
 #include "sys/lfs.h"
 #include <string.h>
 
 //4 drives + 1 tape mountable
-#define MNT_FD_MAX 5
+#define MNT_FD_MAX 6
 FIL mnt_fd_fat[MNT_FD_MAX];
 lfs_file_t mnt_fd_lfs[MNT_FD_MAX];
 
@@ -34,7 +35,9 @@ void mnt_task(void);
 void mnt_stop(void);
 
 uint8_t mnt_mount(uint8_t drive, char *path){
-   if(drive == 4){ //Tape
+    if(drive == 5){ //ROM
+        rom_umount();
+    }else if(drive == 4){ //Tape
         tap_umount();
     }else{
         dsk_umount(drive);
@@ -42,7 +45,9 @@ uint8_t mnt_mount(uint8_t drive, char *path){
     if(path[0]=='0'){   //LFS mount for path starting"0:"
         //Todo attribute check RO
         lfs_file_opencfg(&lfs_volume, &mnt_fd_lfs[drive], &path[2], LFS_O_RDWR, lfs_alloc_file_config());
-        if(drive == 4){
+        if(drive == 5){
+            rom_mount_lfs(&mnt_fd_lfs[5]);
+        }else if(drive == 4){
             tap_mount_lfs(&mnt_fd_lfs[4]);
         }else{
             dsk_mount_lfs(drive, &mnt_fd_lfs[drive]);
@@ -51,7 +56,9 @@ uint8_t mnt_mount(uint8_t drive, char *path){
         FRESULT fresult = f_open(&mnt_fd_fat[drive], path, FA_READ | FA_WRITE);
         if (fresult != FR_OK)
             return API_EFATFS(fresult);
-        if(drive == 4){
+        if(drive == 5){
+            rom_mount_fat(&mnt_fd_fat[5]);
+        }else if(drive == 4){
             tap_mount_fat(&mnt_fd_fat[4]);
         }else{
             dsk_mount_fat(drive, &mnt_fd_fat[drive]);
@@ -76,12 +83,14 @@ void mnt_api_mount(void){
 
 void mnt_api_umount(void){
     uint8_t drive = API_A;
-    if(drive == 4){ //Tape
+    if(drive == 5){ //ROM
+        rom_umount();
+    }else if(drive == 4){ //Tape
         tap_umount();
     }else{
         dsk_umount(drive);
     }
-    if(drive < 5)
+    if(drive < MNT_FD_MAX)
         mnt_status[drive] = UNMOUNTED;
     return api_return_ax(0);
 }
