@@ -208,7 +208,7 @@ void ext_boot_loci(void){
             main_run();
         else{
             mia_set_rom_ram_enable(false,true);
-            IOREGS(0x03BB) = 0x00;  //Release IRQ trap
+            IOREGS(0x03BC) = 0x00;  //Release IRQ trap
         }
 
     }
@@ -232,7 +232,7 @@ void ext_task(void)
                     main_run();
                 else{
                     mia_set_rom_ram_enable(false,true);
-                    IOREGS(0x03BB) = 0x00;  //Release IRQ trap
+                    IOREGS(0x03BC) = 0x00;  //Release IRQ trap
                 }
               }
             break;
