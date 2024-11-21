@@ -776,8 +776,8 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         }
                         else
                         {
-                            IOREGS(0x03AE0) &= ~0b01000000;
-                            IOREGS(0x03AE2) = 0;
+                            IOREGS(0x03A0) &= ~0b01000000;
+                            IOREGS(0x03A2) = 0;
                         }
                         break;
                     }
