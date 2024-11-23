@@ -445,11 +445,12 @@ void dsk_task(void){
             }
             dsk_set_status(DSK_STAT_TRACK_00, dsk_next_track==0);
             dsk_set_status(DSK_STAT_HLOADED, dsk_reg_cmd & DSK_FLAG_LOAD_HEAD);
-            if(dsk_reg_cmd && DSK_FLAG_VERIFY){
+            dsk_set_status(DSK_STAT_INDEX, true);
+            if(dsk_reg_cmd & DSK_FLAG_VERIFY){
                 //TODO Verify only checking first IDAM, not all. Problem?
                 uint32_t pos = dsk_seek_next_idam(0);
                 dsk_set_status(DSK_STAT_HLOADED,true);
-                    dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
+                dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
                 dsk_active.pos = pos;
             }
             dsk_state = DSK_TOGGLE_IRQ;
@@ -743,7 +744,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
             dsk_next_track = dsk_active.drive->tracks - 1;
         }
         //Also triggers for SEEK 
-        if(cmd_flags && DSK_FLAG_UPD_TRACK){
+        if(cmd_flags & DSK_FLAG_UPD_TRACK){
             dsk_reg_track = dsk_next_track;
         }
 
@@ -762,7 +763,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                 break;
             case MISC:
                 //Force interrupt
-                if(cmd_flags && DSK_FLAG_IS_FINT){
+                if(cmd_flags & DSK_FLAG_IS_FINT){
                     //DSK_FLAG_TOREADY
                     //DSK_FLAG_TONREADY
                     dsk_active.index_irq = !!(dsk_reg_cmd & DSK_FLAG_INDEX);
@@ -783,7 +784,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
             case TRACK:
                 dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
-                if(cmd_flags && DSK_FLAG_IS_WRITE){
+                if(cmd_flags & DSK_FLAG_IS_WRITE){
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
