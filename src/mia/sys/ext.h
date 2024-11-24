@@ -35,6 +35,7 @@
  */
 
 void ext_init(void);
+void ext_init_bootstrap(void);  //Needs LFS
 void ext_task(void);
 
 void ext_put(uint8_t pin, bool value);

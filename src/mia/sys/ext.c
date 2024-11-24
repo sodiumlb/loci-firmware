@@ -158,6 +158,37 @@ void ext_init(void)
     ext_state = EXT_IDLE;
 }
 
+void ext_init_bootstrap(){
+#if defined (EMBEDDED_BASIC11B_ROM) || defined (EMBEDDED_BASIC10_ROM) || defined (EMBEDDED_MICRODIS_ROM)
+    struct lfs_info info;
+    lfs_file_t fp;
+#endif
+#ifdef EMBEDDED_BASIC11B_ROM
+    if(lfs_stat(&lfs_volume, "basic11b.rom", &info) == LFS_ERR_NOENT){
+        lfs_file_opencfg(&lfs_volume, &fp, "basic11b.rom", LFS_O_CREAT | LFS_O_RDWR, lfs_alloc_file_config());
+        lfs_file_write(&lfs_volume, &fp, &basic11b_rom[0], basic11b_rom_size);
+        lfs_free_file_config(&fp);
+        lfs_file_close(&lfs_volume, &fp);
+    }
+#endif
+#ifdef EMBEDDED_BASIC10_ROM
+    if(lfs_stat(&lfs_volume, "basic10.rom", &info) == LFS_ERR_NOENT){
+        lfs_file_opencfg(&lfs_volume, &fp, "basic10.rom", LFS_O_CREAT | LFS_O_RDWR, lfs_alloc_file_config());
+        lfs_file_write(&lfs_volume, &fp, &basic10_rom[0], basic10_rom_size);
+        lfs_free_file_config(&fp);
+        lfs_file_close(&lfs_volume, &fp);
+    }
+#endif
+#ifdef EMBEDDED_MICRODIS_ROM
+    if(lfs_stat(&lfs_volume, "microdis.rom", &info) == LFS_ERR_NOENT){
+        lfs_file_opencfg(&lfs_volume, &fp, "microdis.rom", LFS_O_CREAT | LFS_O_RDWR, lfs_alloc_file_config());
+        lfs_file_write(&lfs_volume, &fp, &microdis_rom[0], microdis_rom_size);
+        lfs_free_file_config(&fp);
+        lfs_file_close(&lfs_volume, &fp);
+    }
+#endif
+}
+
 #define TEST_PRG_ADDR (0xFFE8)
 const uint8_t __in_flash() test_prg[] = {
     //FFE8: 

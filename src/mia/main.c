@@ -73,6 +73,7 @@ static void init(void)
     // Misc kernel modules, add yours here
     oem_init();
     adj_init();
+    ext_init_bootstrap();
 
     //aud_init();
     kbd_init();
