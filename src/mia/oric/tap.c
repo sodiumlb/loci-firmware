@@ -161,10 +161,11 @@ void tap_rewind(void){
 void tap_ffw(void){
     switch(tap_drive.type){
         case LFS:
-            lfs_file_seek(&lfs_volume, tap_drive.lfs_file, 0, LFS_SEEK_END);
+            tap_drive.counter = lfs_file_seek(&lfs_volume, tap_drive.lfs_file, 0, LFS_SEEK_END);
             break;
         case FAT:
             f_lseek(tap_drive.fat_file,f_size(tap_drive.fat_file));
+            tap_drive.counter = f_tell(tap_drive.fat_file);
             break;
         default:
             break;
