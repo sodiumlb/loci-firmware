@@ -275,8 +275,22 @@ void tap_task(void){
                 tap_state = TAP_READY;
                 led_set(true);
             }
+            //Non motor protected commands
+            switch(IOREGS(TAP_IO_CMD)){
+                case TAP_CMD_REW:
+                    tap_rewind();
+                    IOREGS(TAP_IO_CMD) = 0x00;
+                    break;
+                case TAP_CMD_FFW:
+                    tap_ffw();
+                    IOREGS(TAP_IO_CMD) = 0x00;
+                    break;
+                default:
+                    break;
+            }   
             break;
         case TAP_READY:
+            //Motor protected commands
             if(tap_drive.motor_on){
                 switch(IOREGS(TAP_IO_CMD)){
                     case TAP_CMD_PLAY:
@@ -288,19 +302,10 @@ void tap_task(void){
                         tap_set_status(TAP_STAT_BUSY,true);
                         tap_state = TAP_WRITE;
                         break;
-                    case TAP_CMD_REW:
-                        tap_rewind();
-                        IOREGS(TAP_IO_CMD) = 0x00;
-                        tap_state = TAP_READY;
-                    break;
                     case TAP_CMD_READ_BIT:
                         tap_set_status(TAP_STAT_BUSY,true);
                         tap_state = TAP_READ_BIT;
                         break;
-                    case TAP_CMD_FFW:
-                        tap_ffw();
-                        IOREGS(TAP_IO_CMD) = 0x00;
-                        tap_state = TAP_READY;
                     default:
                         break;
                 }   
