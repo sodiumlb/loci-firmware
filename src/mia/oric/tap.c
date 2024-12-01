@@ -32,6 +32,8 @@ typedef struct _tap_drive_t {
     uint8_t lead_in;
     uint8_t filename[16];
     uint8_t bit_counter;
+    bool dirty;
+    bool motor_on;
 } tap_drive_t;
 
 typedef struct _tap_header_t {
@@ -51,6 +53,8 @@ typedef struct _tap_header_t {
 
 tap_drive_t tap_drive = {0};
 
+
+//TODO REMOVE Status is not currently in use by the API and is rottening
 #define TAP_STAT_NOT_READY (0b10000000)
 #define TAP_STAT_WPROT     (0b01000000)
 #define TAP_STAT_BUSY      (0b00000001)
@@ -59,6 +63,7 @@ tap_drive_t tap_drive = {0};
 #define TAP_CMD_REC         (0x02)
 #define TAP_CMD_REW         (0x03)
 #define TAP_CMD_READ_BIT    (0x04)
+#define TAP_CMD_FFW         (0x05)
 
 uint8_t tap_parity(uint8_t byte){
     uint8_t parity = 1;
@@ -134,6 +139,7 @@ void tap_umount(void){
     tap_drive.counter = 0;
     tap_drive.bit_counter = 0;
     tap_drive.lead_in = 0;
+    tap_drive.dirty = false;
 }
 
 void tap_rewind(void){
@@ -150,6 +156,19 @@ void tap_rewind(void){
     tap_drive.counter = 0;
     tap_drive.bit_counter = 0;
     tap_drive.lead_in = 0;
+}
+
+void tap_ffw(void){
+    switch(tap_drive.type){
+        case LFS:
+            lfs_file_seek(&lfs_volume, tap_drive.lfs_file, 0, LFS_SEEK_END);
+            break;
+        case FAT:
+            f_lseek(tap_drive.fat_file,f_size(tap_drive.fat_file));
+            break;
+        default:
+            break;
+    }
 }
 
 uint32_t tap_seek(uint32_t pos){
@@ -173,7 +192,7 @@ uint32_t tap_seek(uint32_t pos){
     return new_pos;
 }
 
-enum TAP_STATE { TAP_IDLE, TAP_READ_BYTE, TAP_WRITE, TAP_READ_BIT, TAP_CLEANUP } tap_state = TAP_IDLE;
+enum TAP_STATE { TAP_IDLE, TAP_READY, TAP_READ_BYTE, TAP_WRITE, TAP_READ_BIT } tap_state = TAP_IDLE;
 
 uint8_t tap_read_byte(void){
     bool fs_ret = false;
@@ -211,6 +230,32 @@ uint8_t tap_read_byte(void){
     return data;
 }
 
+void tap_write_byte(uint8_t data){
+    bool fs_ret = false;
+    UINT bw;
+    FRESULT fr;
+    switch(tap_drive.type){
+        case LFS:
+            if(lfs_file_write(&lfs_volume, tap_drive.lfs_file, (void *) &data, 1) == 1){
+                tap_drive.counter++;
+                fs_ret = true;
+            };
+            break;
+        case FAT:
+            fr = f_write(tap_drive.fat_file, (void *) &data, 1, &bw);
+            if(fr == FR_OK && bw == 1){
+                tap_drive.counter++;
+                fs_ret = true;
+            }
+            break;
+        default:
+            break;
+            //TODO error
+    }
+    if(fs_ret)
+        tap_drive.dirty = true;
+}
+
 void tap_init(void){
     IOREGS(TAP_IO_STAT) = TAP_STAT_NOT_READY; 
     IOREGS(TAP_IO_CMD)  = 0x00; 
@@ -219,31 +264,61 @@ void tap_init(void){
     tap_drive.type = EMPTY;
     tap_drive.counter = 0;
     tap_drive.bit_counter = 0;
+    tap_drive.dirty = false;
 }
 
 void tap_task(void){
     switch(tap_state){
         case TAP_IDLE:
-            switch(IOREGS(TAP_IO_CMD)){
-                case TAP_CMD_PLAY:
-                    tap_state = TAP_READ_BYTE;
-                    tap_set_status(TAP_STAT_BUSY,true);
+            if(tap_drive.motor_on){
+                tap_state = TAP_READY;
+                led_set(true);
+            }
+            break;
+        case TAP_READY:
+            if(tap_drive.motor_on){
+                switch(IOREGS(TAP_IO_CMD)){
+                    case TAP_CMD_PLAY:
+                        tap_state = TAP_READ_BYTE;
+                        tap_set_status(TAP_STAT_BUSY,true);
+                        break;
+                    case TAP_CMD_REC:
+                    //TODO setup initial write file
+                        tap_set_status(TAP_STAT_BUSY,true);
+                        tap_state = TAP_WRITE;
+                        break;
+                    case TAP_CMD_REW:
+                        tap_rewind();
+                        IOREGS(TAP_IO_CMD) = 0x00;
+                        tap_state = TAP_READY;
                     break;
-                case TAP_CMD_REC:
-                //TODO setup initial write file
-                    tap_set_status(TAP_STAT_BUSY,true);
-                    tap_state = TAP_WRITE;
-                    break;
-                case TAP_CMD_REW:
-                    tap_rewind();
-                    tap_state = TAP_CLEANUP;
-                   break;
-                case TAP_CMD_READ_BIT:
-                    tap_set_status(TAP_STAT_BUSY,true);
-                    tap_state = TAP_READ_BIT;
-                    break;
-                 default:
-                    break;
+                    case TAP_CMD_READ_BIT:
+                        tap_set_status(TAP_STAT_BUSY,true);
+                        tap_state = TAP_READ_BIT;
+                        break;
+                    case TAP_CMD_FFW:
+                        tap_ffw();
+                        IOREGS(TAP_IO_CMD) = 0x00;
+                        tap_state = TAP_READY;
+                    default:
+                        break;
+                }   
+            }else{
+                led_set(false);
+                if(tap_drive.dirty){
+                    switch(tap_drive.type){
+                        case LFS:
+                            lfs_file_sync(&lfs_volume, tap_drive.lfs_file);
+                            break;
+                        case FAT:
+                            f_sync(tap_drive.fat_file);
+                            break;
+                        default:
+                            break;
+                    }
+                    tap_drive.dirty = false;
+                }
+                tap_state = TAP_IDLE;
             }
             break;
         case TAP_READ_BYTE:
@@ -251,7 +326,7 @@ void tap_task(void){
                 IOREGS(TAP_IO_DATA) = tap_read_byte();
                 tap_set_status(TAP_STAT_BUSY,false);
                 IOREGS(TAP_IO_CMD) = 0x00;
-                tap_state = TAP_IDLE;
+                tap_state = TAP_READY;
             }
             break;
         case TAP_READ_BIT:
@@ -264,13 +339,16 @@ void tap_task(void){
                     tap_drive.bit_counter = 0;
                 tap_set_status(TAP_STAT_BUSY,false);
                 IOREGS(TAP_IO_CMD) = 0x00;
-                tap_state = TAP_IDLE;
+                tap_state = TAP_READY;
             }
-        case TAP_WRITE:
             break;
-        case TAP_CLEANUP:
-            IOREGS(TAP_IO_CMD) = 0x00;
-            tap_state = TAP_IDLE;
+        case TAP_WRITE:
+            if(IOREGS(TAP_IO_STAT) & TAP_STAT_BUSY){
+                tap_write_byte(IOREGS(TAP_IO_DATA));
+                tap_set_status(TAP_STAT_BUSY,false);
+                IOREGS(TAP_IO_CMD) = 0x00;
+                tap_state = TAP_READY;
+            }
             break;
         default:
             tap_state = TAP_IDLE;
@@ -279,7 +357,7 @@ void tap_task(void){
 
 //Show tape motor status on LED
 void __not_in_flash() tap_act(uint8_t data){
-    led_set(data & 0x40);
+    tap_drive.motor_on = !!(data & 0x40);
 }
 
 //Set/Get counter (aka seek).
