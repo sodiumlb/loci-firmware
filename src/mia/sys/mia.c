@@ -284,7 +284,7 @@ AD 15 03   WAIT:     LDA $0315
 D0 FB                BNE WAIT
 AD 17 03             LDA $0317
 6A                   ROR A
-68                   PHA
+68                   PLA
 60                   RTS
 */
 #define READ_BIT_PATCH_10_ADDR (0xE67D)
@@ -293,6 +293,23 @@ const uint8_t __in_flash() mia_read_bit_patch[] = {
     0x48, 0xA9, 0x04, 0x8D, 0x15, 0x03, 0xAD, 0x15, 
     0x03, 0xD0, 0xFB, 0xAD, 0x17, 0x03, 0x6A, 0x68, 
     0x60
+};
+
+/* Basic CSAVE write byte patch
+48                   PHA
+8D 17 03             STA $0317
+A9 02                LDA #$02
+8D 15 03             STA $0315
+AD 15 03   WAIT:     LDA $0315
+D0 FB                BNE WAIT
+68                   PLA
+60                   RTS
+*/
+#define WRITE_BYTE_PATCH_10_ADDR (0xE5C6)
+#define WRITE_BYTE_PATCH_11_ADDR (0xE65E)
+const uint8_t __in_flash() mia_write_byte_patch[] = {
+    0x48, 0x8D, 0x17, 0x03, 0xA9, 0x02, 0x8D, 0x15, 
+    0x03, 0xAD, 0x15, 0x03, 0xD0, 0xFB, 0x68, 0x60
 };
 
 void mia_task(void)
@@ -334,7 +351,7 @@ void mia_task(void)
             if(!rom_active()){
                 printf("BIOS loaded done\n");
                 mia_boot_state = MIA_IDLE;
-                //Patch for TAP loading CLOAD
+                //Patch for TAP loading CLOAD and CSAVE
                 if(!rom_is_mounted() && (mia_boot_settings & MIA_BOOTSET_TAP)){
                     if(mia_boot_settings & MIA_BOOTSET_B11){
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_11); i++){
@@ -349,6 +366,9 @@ void mia_task(void)
                                 xram[CLOAD_PATCH_11_ADDR+i] = mia_cload_patch[i];
                             }
                         }
+                        for(uint16_t i=0; i<sizeof(mia_write_byte_patch); i++){
+                            xram[WRITE_BYTE_PATCH_11_ADDR+i] = mia_write_byte_patch[i];
+                        }
                      }else{
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_10); i++){
                             xram[SYNCH_PATCH_10_ADDR+i] = mia_synch_patch_10[i];
@@ -361,6 +381,9 @@ void mia_task(void)
                             for(uint16_t i=0; i<sizeof(mia_cload_patch); i++){
                                 xram[CLOAD_PATCH_10_ADDR+i] = mia_cload_patch[i];
                             }
+                        }
+                        for(uint16_t i=0; i<sizeof(mia_write_byte_patch); i++){
+                            xram[WRITE_BYTE_PATCH_10_ADDR+i] = mia_write_byte_patch[i];
                         }
                     }
                 }
