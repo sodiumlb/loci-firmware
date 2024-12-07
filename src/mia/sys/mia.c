@@ -1407,6 +1407,7 @@ void mia_api_boot(void){
             api_return_errno(API_EMFILE);
         }else{
             printf("DEV ROM loaded ok\n");
+            dsk_pause(false);
             if(mia_boot_settings & MIA_BOOTSET_FAST){
                 /*
                 if((mia_boot_settings & MIA_BOOTSET_RESUME)){    

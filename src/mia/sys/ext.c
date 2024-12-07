@@ -219,6 +219,7 @@ static enum {
 } ext_boot_src;
 
 void ext_boot_loci(void){
+    dsk_pause(true);                         //Pause DSK emulation / IRQ loop
     ext_boot_src = EXT_BOOT_USB;
     rom_mon_load("locirom.rp6502", 14);    //First ROM priority: USB storage
     if(!rom_active()){

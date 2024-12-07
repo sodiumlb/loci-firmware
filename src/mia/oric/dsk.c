@@ -57,6 +57,61 @@ volatile struct {
     bool track_writeback;
 } dsk_active;
 
+//Type I flags
+#define DSK_FLAG_IS_SEEK   (0b00010000)
+#define DSK_FLAG_UPD_TRACK (0b00010000)
+#define DSK_FLAG_LOAD_HEAD (0b00001000)
+#define DSK_FLAG_VERIFY    (0b00000100)
+//Type II & III flags
+#define DSK_FLAG_IS_WRITE  (0b00010000)
+#define DSK_FLAG_MULTI     (0b00010000)
+#define DSK_FLAG_SIDE      (0b00001000)
+#define DSK_FLAG_DELAY     (0b00000100)
+#define DSK_FLAG_SIDE_CMP  (0b00000010)
+#define DSK_FLAG_DMARK     (0b00000001)
+//Type IV flags
+#define DSK_FLAG_IS_FINT   (0b00010000)
+#define DSK_FLAG_TOREADY   (0b00000001)
+#define DSK_FLAG_TONREADY  (0b00000010)
+#define DSK_FLAG_INDEX     (0b00000100)
+#define DSK_FLAG_IMMEDIATE (0b00001000)
+
+#define DSK_STAT_NOT_READY (0b10000000)
+#define DSK_STAT_WPROT     (0b01000000)
+#define DSK_STAT_HLOADED   (0b00100000)
+#define DSK_STAT_RECTYPE   (0b00100000)
+#define DSK_STAT_WFAULT    (0b00100000)
+#define DSK_STAT_SEEK_ERR  (0b00010000)
+#define DSK_STAT_RNF       (0b00010000)
+#define DSK_STAT_CRC_ERR   (0b00001000)
+#define DSK_STAT_TRACK_00  (0b00000100)
+#define DSK_STAT_LOST_DATA (0b00000100)
+#define DSK_STAT_INDEX     (0b00000010)
+#define DSK_STAT_DRQ       (0b00000010)
+#define DSK_STAT_BUSY      (0b00000001)
+
+#define DSK_REG_IRQ_BIT    (0b10000000)
+
+#define DSK_CTRL_IRQ_EN    (0b00000001)
+#define DSK_CTRL_BROM_EN   (0b00000010)
+#define DSK_CTRL_RCLK2     (0b00000100)
+#define DSK_CTRL_DD_EN     (0b00001000)
+#define DSK_CTRL_SIDE      (0b00010000)
+#define DSK_CTRL_DRIVE     (0b01100000)
+#define DSK_CTRL_DROM_DIS  (0b10000000)
+
+
+//Status and CMD register are overlapped and can not be directy mapped
+volatile uint8_t        dsk_reg_status, 
+                        dsk_reg_cmd,
+                        dsk_reg_irq;
+volatile uint8_t        dsk_reg_ctrl;
+volatile uint8_t        dsk_next_status;
+#define dsk_reg_track  IOREGS(DSK_IO_TRACK)
+#define dsk_reg_sector IOREGS(DSK_IO_SECT)
+#define dsk_reg_data   IOREGS(DSK_IO_DATA)
+#define dsk_reg_drq    IOREGS(DSK_IO_DRQ)
+
 uint8_t dsk_cmd(uint8_t raw_cmd);
 bool dsk_flush_track(void);
 
@@ -208,52 +263,6 @@ static inline void dsk_set_active_side(uint8_t side){
     }
 }
 
-
-//Type I flags
-#define DSK_FLAG_IS_SEEK   (0b00010000)
-#define DSK_FLAG_UPD_TRACK (0b00010000)
-#define DSK_FLAG_LOAD_HEAD (0b00001000)
-#define DSK_FLAG_VERIFY    (0b00000100)
-//Type II & III flags
-#define DSK_FLAG_IS_WRITE  (0b00010000)
-#define DSK_FLAG_MULTI     (0b00010000)
-#define DSK_FLAG_SIDE      (0b00001000)
-#define DSK_FLAG_DELAY     (0b00000100)
-#define DSK_FLAG_SIDE_CMP  (0b00000010)
-#define DSK_FLAG_DMARK     (0b00000001)
-//Type IV flags
-#define DSK_FLAG_IS_FINT   (0b00010000)
-#define DSK_FLAG_TOREADY   (0b00000001)
-#define DSK_FLAG_TONREADY  (0b00000010)
-#define DSK_FLAG_INDEX     (0b00000100)
-#define DSK_FLAG_IMMEDIATE (0b00001000)
-
-#define DSK_STAT_NOT_READY (0b10000000)
-#define DSK_STAT_WPROT     (0b01000000)
-#define DSK_STAT_HLOADED   (0b00100000)
-#define DSK_STAT_RECTYPE   (0b00100000)
-#define DSK_STAT_WFAULT    (0b00100000)
-#define DSK_STAT_SEEK_ERR  (0b00010000)
-#define DSK_STAT_RNF       (0b00010000)
-#define DSK_STAT_CRC_ERR   (0b00001000)
-#define DSK_STAT_TRACK_00  (0b00000100)
-#define DSK_STAT_LOST_DATA (0b00000100)
-#define DSK_STAT_INDEX     (0b00000010)
-#define DSK_STAT_DRQ       (0b00000010)
-#define DSK_STAT_BUSY      (0b00000001)
-
-#define DSK_REG_IRQ_BIT    (0b10000000)
-
-//Status and CMD register are overlapped and can not be directy mapped
-volatile uint8_t        dsk_reg_status, 
-                        dsk_reg_cmd,
-                        dsk_reg_irq;
-volatile uint8_t        dsk_reg_ctrl;
-volatile uint8_t        dsk_next_status;
-#define dsk_reg_track  IOREGS(DSK_IO_TRACK)
-#define dsk_reg_sector IOREGS(DSK_IO_SECT)
-#define dsk_reg_data   IOREGS(DSK_IO_DATA)
-#define dsk_reg_drq    IOREGS(DSK_IO_DRQ)
 /*
 extern volatile uint8_t dsk_reg_track,  
                         dsk_reg_sector, 
@@ -261,7 +270,7 @@ extern volatile uint8_t dsk_reg_track,
                         dsk_req_irq;
 */
 
-volatile bool dsk_irq_enable;
+volatile bool dsk_paused;
 void dsk_set_status(uint8_t bit, bool val){
     if(val){
         dsk_reg_status |= bit;
@@ -319,7 +328,7 @@ void dsk_init(void){
     dsk_reg_irq = 0x80;     //Active low IRQ
     dsk_reg_drq = 0x80;     //Active low DRQ
 
-    dsk_irq_enable = false;
+    dsk_paused = false;
     dsk_next_status = dsk_reg_status;
     
 }
@@ -341,6 +350,8 @@ uint32_t dsk_seek_next_idam(uint32_t start){
 
 bool dsk_set_active_sector(uint32_t sector){
     //printf("<sas>");
+    if(dsk_active.drive->type == EMPTY)
+        return false;
     for(uint32_t i=0; i<6400-16; i++){
         //ID Address Mark
         if( dsk_buf[i]   == 0xA1 &&
@@ -391,7 +402,9 @@ volatile uint32_t dsk_byte_cnt;
 
 void dsk_task(void){
     static uint8_t dsk_next_track = 0;
+    static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
+    
 
     switch(dsk_state){
         case DSK_IDLE:
@@ -411,7 +424,6 @@ void dsk_task(void){
                     dsk_next_track = dsk_cmd(cmd_from_act);
                 else
                     dsk_next_track = dsk_active.track;
-                dsk_irq_enable = (ctrl_from_act & 0x01);
                 //TODO: Read CLK, DDEN
                 uint8_t side = (ctrl_from_act >> 4) & 0x01;
                 uint8_t drive = (ctrl_from_act >> 5) & 0x03;
@@ -440,20 +452,26 @@ void dsk_task(void){
         case DSK_SEEK:
             //printf("-seek-");
             led_set(true);
-            if(dsk_next_track != dsk_active.track){     //Drive and side checks done on receive of CMD
-                dsk_set_active_track(dsk_next_track);
+            if(dsk_active.drive->type != EMPTY){
+                if(dsk_next_track != dsk_active.track){     //Drive and side checks done on receive of CMD
+                    dsk_set_active_track(dsk_next_track);
+                }
+                dsk_set_status(DSK_STAT_TRACK_00, dsk_next_track==0);
+                dsk_set_status(DSK_STAT_HLOADED, dsk_reg_cmd & DSK_FLAG_LOAD_HEAD);
+                dsk_set_status(DSK_STAT_INDEX, true);
+                if(dsk_reg_cmd & DSK_FLAG_VERIFY){
+                    //TODO Verify only checking first IDAM, not all. Problem?
+                    uint32_t pos = dsk_seek_next_idam(0);
+                    dsk_set_status(DSK_STAT_HLOADED,true);
+                    dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
+                    dsk_active.pos = pos;
+                }
+                dsk_state = DSK_TOGGLE_IRQ;
             }
-            dsk_set_status(DSK_STAT_TRACK_00, dsk_next_track==0);
-            dsk_set_status(DSK_STAT_HLOADED, dsk_reg_cmd & DSK_FLAG_LOAD_HEAD);
-            dsk_set_status(DSK_STAT_INDEX, true);
-            if(dsk_reg_cmd & DSK_FLAG_VERIFY){
-                //TODO Verify only checking first IDAM, not all. Problem?
-                uint32_t pos = dsk_seek_next_idam(0);
-                dsk_set_status(DSK_STAT_HLOADED,true);
-                dsk_set_status(DSK_STAT_SEEK_ERR,dsk_buf[pos] != dsk_reg_track);
-                dsk_active.pos = pos;
-            }
-            dsk_state = DSK_TOGGLE_IRQ;
+            /*else{
+                dsk_set_status(DSK_STAT_SEEK_ERR,true);
+                dsk_state = DSK_TOGGLE_IRQ;
+            }*/
             break;
         case DSK_READ_PREP:
             //printf("-rprep-");
@@ -466,9 +484,11 @@ void dsk_task(void){
                 dsk_rw_countdown = dsk_active.data_len * 2;  //passes before we end the read
                 //TODO Multi handling
             }else{
-                printf("fail sec %d",dsk_reg_sector);
-                dsk_set_status(DSK_STAT_RNF,true);
-                dsk_state = DSK_TOGGLE_IRQ;
+                if(dsk_active.drive->type != EMPTY){
+                    printf("fail sec %d",dsk_reg_sector);
+                    dsk_set_status(DSK_STAT_RNF,true);
+                    dsk_state = DSK_TOGGLE_IRQ;
+                }
             }
             break;
         case DSK_READ:
@@ -500,8 +520,11 @@ void dsk_task(void){
                 dsk_rw_countdown = dsk_active.data_len * 2;  //passes before we end the read
                 //TODO Multi handling
             }else{
-                dsk_set_status(DSK_STAT_RNF,true);
-                dsk_state = DSK_TOGGLE_IRQ;
+                if(dsk_active.drive->type != EMPTY){
+                    dsk_set_status(DSK_STAT_RNF,true);
+                    dsk_state = DSK_TOGGLE_IRQ;
+
+                }
             }
             break;
         case DSK_WRITE:
@@ -525,14 +548,16 @@ void dsk_task(void){
             }
             break;
         case DSK_READ_ADDR:
-            do {
-                dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
-            }while(dsk_active.data_start == 0);
+            if(dsk_active.drive->type != EMPTY){
+                do {
+                    dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
+                }while(dsk_active.data_start == 0);
 
-            dsk_active.data_len = 6;
-            //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
-            dsk_active.pos = dsk_active.data_start;
-            dsk_state = DSK_READ;
+                dsk_active.data_len = 6;
+                //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
+                dsk_active.pos = dsk_active.data_start;
+                dsk_state = DSK_READ;
+            }
             break;
         case DSK_TOGGLE_IRQ:
             //printf("-toggle-");
@@ -548,10 +573,16 @@ void dsk_task(void){
         default:
             dsk_state = DSK_IDLE;
     }
+    dsk_index_countdown--;
+
+    if(dsk_active.index_irq && dsk_index_countdown == 0 && dsk_active.drive->type != EMPTY){
+        dsk_reg_irq = 0x00; // Assert IRQ low
+    }
+
     IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
     IOREGS(DSK_IO_CTRL) = dsk_reg_irq;      //Not directly mapped due to combined with CTRL
 
-    if(dsk_irq_enable && dsk_reg_irq == 0x00){     //Slow IO signal, just toggle it - fingers crossed
+    if((dsk_reg_ctrl & DSK_CTRL_IRQ_EN) && (dsk_reg_irq == 0x00) && !dsk_paused){     //Slow IO signal, just toggle it - fingers crossed
         ext_pulse(EXT_IRQ);
         //printf("[irq %d]",dsk_state);
     }
@@ -560,10 +591,14 @@ void dsk_task(void){
 
 //Stop activity but keep mounts
 void dsk_stop(void){
-    dsk_irq_enable = false;
+    dsk_pause(true);
     led_set(false);
     dsk_set_status(DSK_STAT_BUSY, false);
     dsk_state = DSK_IDLE;
+}
+
+void dsk_pause(bool on){
+    dsk_paused = on;
 }
 
 /*
@@ -764,9 +799,8 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
             case MISC:
                 //Force interrupt
                 if(cmd_flags & DSK_FLAG_IS_FINT){
-                    //DSK_FLAG_TOREADY
-                    //DSK_FLAG_TONREADY
-                    dsk_active.index_irq = !!(dsk_reg_cmd & DSK_FLAG_INDEX);
+                    //Microdisc has READY tied high - no change in READY signal    
+                    dsk_active.index_irq = !!(cmd_flags & DSK_FLAG_INDEX);
                     //DSK_FLAG_IMMEDIATE
                     if(cmd_flags & DSK_FLAG_IMMEDIATE){
                         //dsk_reg_irq = 0x00;
