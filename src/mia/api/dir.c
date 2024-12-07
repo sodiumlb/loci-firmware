@@ -53,7 +53,7 @@ struct dir_dirent {
     int16_t d_fd;
     uint8_t d_name[DIR_FN_LEN];
     uint8_t d_attrib;
-    uint16_t d_size;
+    uint32_t d_size;
 };
 
 
@@ -148,7 +148,7 @@ void dir_api_readdir(void){
         }else{
             strncpy((char*)dirent.d_name, fno.fname, DIR_FN_LEN);
         } 
-        dirent.d_size = fno.fsize;
+        dirent.d_size = (uint32_t)fno.fsize;
     }else if(fd >= FD_OFFS_LFS){
         lfs_dir_t *dp = &dir_lfs[fd - FD_OFFS_LFS];
         struct lfs_info info;
