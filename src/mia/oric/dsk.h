@@ -34,6 +34,7 @@ void dsk_stop(void);
 void dsk_act(uint8_t raw_cmd);
 void dsk_rw(bool is_write,uint8_t data);
 void dsk_set_ctrl(uint8_t raw_reg);
+void dsk_pause(bool on);
 
 extern volatile uint8_t dsk_reg_status, dsk_reg_cmd, dsk_reg_irq; 
 enum DSK_STATE { 
