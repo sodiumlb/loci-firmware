@@ -317,7 +317,7 @@ void dsk_init(void){
     dsk_active.step_dir_out = false;
     dsk_active.index_irq = false;
     dsk_active.sector_dm = false; 
-    dsk_active.buf_update_needed = false;
+    dsk_active.buf_update_needed = true;
     dsk_active.track_writeback = false;
 
     dsk_reg_status = 0x00;
