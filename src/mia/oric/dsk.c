@@ -306,6 +306,9 @@ volatile enum DSK_STATE dsk_state = DSK_IDLE;
 void dsk_init(void){
     dsk_state = DSK_IDLE;
 
+    if(dsk_active.track_writeback)
+        dsk_flush_track();
+
     dsk_active.drive_num = 0;
     dsk_active.drive = &dsk_drives[0];
 
