@@ -53,9 +53,10 @@ struct dir_dirent {
     int16_t d_fd;
     uint8_t d_name[DIR_FN_LEN];
     uint8_t d_attrib;
+    uint8_t reserved;
     uint32_t d_size;
 };
-
+static_assert(sizeof(struct dir_dirent)==(2+DIR_FN_LEN+1+1+4),"struct dir_dirent size wrong");
 
 void dir_api_opendir(void){
     uint8_t *path = &xstack[xstack_ptr];
