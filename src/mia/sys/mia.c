@@ -69,6 +69,7 @@ void mia_save_map_flags(void){
 #define MIA_BOOTSET_TAP 0x02
 #define MIA_BOOTSET_B11 0x04
 #define MIA_BOOTSET_TAP_BIT 0x08
+#define MIA_BOOTSET_TAP_ALD 0x10
 #define MIA_BOOTSET_FAST 0x80
 #define MIA_BOOTSET_RESUME 0x40
 
@@ -312,6 +313,45 @@ const uint8_t __in_flash() mia_write_byte_patch[] = {
     0x03, 0xAD, 0x15, 0x03, 0xD0, 0xFB, 0x68, 0x60
 };
 
+/* Basic autoload setup patch
+A9 22               LDA #$22    ;Put '"\0' in bÃÂuffer 
+85 35               STA $35
+A9 00               LDA #$00
+85 36               STA $36
+85 EA               STA $EA
+A9 34               LDA #$34    ;Point to buffer
+85 E9               STA $E9
+A9 B6               LDA #$B6    ;Setup CLOAD token
+38                  SEC
+4C 0F C9            JMP $C90F   ;Jump to execute    Basic 1.1
+4C F8 C8            JMP $C8F8   ;Jump to execute    Basic 1.0
+*/
+//Uses freed space in sync function
+#define AUTOLOAD_SETUP_PATCH_11_ADDR (0xE738)
+const uint8_t __in_flash() mia_autoload_setup_patch_11[] = {
+    0xA9, 0x22, 0x85, 0x35, 0xA9, 0x00, 0x85, 0x36, 
+    0x85, 0xEA, 0xA9, 0x34, 0x85, 0xE9, 0xA9, 0xB6, 
+    0x38, 0x4C, 0x0F, 0xC9
+};
+#define AUTOLOAD_SETUP_PATCH_10_ADDR (0xE699)
+const uint8_t __in_flash() mia_autoload_setup_patch_10[] = {
+    0xA9, 0x22, 0x85, 0x35, 0xA9, 0x00, 0x85, 0x36, 
+    0x85, 0xEA, 0xA9, 0x34, 0x85, 0xE9, 0xA9, 0xB6, 
+    0x38, 0x4C, 0xF8, 0xC8
+};
+/* Basic autoload jump patch
+4C 38 E7            JMP $E738   ;Basic 1.1
+4C 3E EB            JMP $E699   ;Basic 1.0
+*/
+#define AUTOLOAD_JUMP_PATCH_11_ADDR (0xED83)
+const uint8_t __in_flash() mia_autoload_jump_patch_11[] = {
+    0x4C, 0x38, 0xE7
+};
+#define AUTOLOAD_JUMP_PATCH_10_ADDR (0xEB3E)
+const uint8_t __in_flash() mia_autoload_jump_patch_10[] = {
+    0x4C, 0x99, 0xE6
+};
+
 void mia_task(void)
 {
     bool rom_is_loading;
@@ -369,6 +409,14 @@ void mia_task(void)
                         for(uint16_t i=0; i<sizeof(mia_write_byte_patch); i++){
                             xram[WRITE_BYTE_PATCH_11_ADDR+i] = mia_write_byte_patch[i];
                         }
+                        if(!!(mia_boot_settings & MIA_BOOTSET_TAP_ALD)){
+                            for(uint16_t i=0; i<sizeof(mia_autoload_setup_patch_11); i++){
+                                xram[AUTOLOAD_SETUP_PATCH_11_ADDR+i] = mia_autoload_setup_patch_11[i];
+                            }
+                            for(uint16_t i=0; i<sizeof(mia_autoload_jump_patch_11); i++){
+                                xram[AUTOLOAD_JUMP_PATCH_11_ADDR+i] = mia_autoload_jump_patch_11[i];
+                            }
+                        }
                      }else{
                         for(uint16_t i=0; i<sizeof(mia_synch_patch_10); i++){
                             xram[SYNCH_PATCH_10_ADDR+i] = mia_synch_patch_10[i];
@@ -384,6 +432,14 @@ void mia_task(void)
                         }
                         for(uint16_t i=0; i<sizeof(mia_write_byte_patch); i++){
                             xram[WRITE_BYTE_PATCH_10_ADDR+i] = mia_write_byte_patch[i];
+                        }
+                        if(!!(mia_boot_settings & MIA_BOOTSET_TAP_ALD)){
+                            for(uint16_t i=0; i<sizeof(mia_autoload_setup_patch_10); i++){
+                                xram[AUTOLOAD_SETUP_PATCH_10_ADDR+i] = mia_autoload_setup_patch_10[i];
+                            }
+                            for(uint16_t i=0; i<sizeof(mia_autoload_jump_patch_10); i++){
+                                xram[AUTOLOAD_JUMP_PATCH_10_ADDR+i] = mia_autoload_jump_patch_10[i];
+                            }
                         }
                     }
                 }
