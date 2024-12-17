@@ -275,6 +275,9 @@ bool main_api(uint8_t operation)
     case 0x94:
         tap_api_read_header();
         break;
+    case 0x98:
+        sys_api_uname();
+        break;
     case 0xA0:
         mia_api_boot();
         break;

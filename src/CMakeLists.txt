@@ -154,6 +154,7 @@ set_property(TARGET loci-firmware
     LOCIFW_MIN_PHI2=500
     LOCIFW_MAX_PHI2=8000
     LOCIFW_EXFAT=1
+    LOCIFW_BOARD="Rev 1.x"
 )
 if(DEFINED LOCIFW_VERSION)
     set_property(TARGET loci-firmware

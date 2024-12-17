@@ -15,6 +15,7 @@
 void sys_mon_reboot(const char *args, size_t len);
 void sys_mon_reset(const char *args, size_t len);
 void sys_mon_status(const char *args, size_t len);
+void sys_api_uname(void);
 void sys_init(void);
 
 #endif /* _SYS_H_ */
