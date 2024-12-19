@@ -29,6 +29,8 @@ function(create_resources dir output)
         string(REGEX MATCH "([^/]+)$" filename ${bin})
         # Replace filename spaces & extension separator for C compatibility
         string(REGEX REPLACE "\\.| |-" "_" filename ${filename})
+        # Construct name for int storage
+        string(REGEX REPLACE "_rom$" ".rom" filenameint ${filename})
         # Read hex data from file
         file(READ ${bin} filedata HEX)
         # Convert hex data for C compatibility
@@ -39,7 +41,19 @@ function(create_resources dir output)
         string(CONCAT definetoken "EMBEDDED_" ${filetoken})
         # Append data to output file
         file(APPEND ${output} "#define ${definetoken}\nconst unsigned char __in_flash() ${filename}[] = {${filedata}};\nconst unsigned ${filename}_size = sizeof(${filename});\n")
+        # Add it to names array
+        string(CONCAT namesarray ${namesarray} "\t{ \"${filenameint}\", ${filename}, sizeof(${filename}) },\n")
     endforeach()
+
+    file(APPEND ${output} "\n// @iss\n")
+    file(APPEND ${output} "typedef struct rom_desc_s{\n")
+    file(APPEND ${output} "\tconst char* name;\n")
+    file(APPEND ${output} "\tconst unsigned char* array;\n")
+    file(APPEND ${output} "\tunsigned size;\n} rom_desc_t, *rom_desc_p;\n\n")
+
+    file(APPEND ${output} "const __in_flash() rom_desc_t rom_desc[] = {\n")
+    file(APPEND ${output} "${namesarray}};\n")
+    file(APPEND ${output} "const size_t __in_flash() rom_desc_cnt = sizeof(rom_desc)/sizeof(rom_desc[0]);\n")
 endfunction()
 
 create_resources(${CMAKE_CURRENT_LIST_DIR}/roms ${CMAKE_BINARY_DIR}/loci_roms.h)
@@ -65,7 +79,7 @@ target_compile_definitions(loci-firmware PRIVATE
     #LFS_YES_TRACE=1
     PICO_FLASH_SIZE_BYTES=16777216
     PICO_USE_STACK_GUARDS=1
-    PICO_DEBUG_MALLOC=1
+    #PICO_DEBUG_MALLOC=1
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
     PICO_CLOCK_AJDUST_PERI_CLOCK_WITH_SYS_CLOCK=1
 )
@@ -155,6 +169,9 @@ set_property(TARGET loci-firmware
     LOCIFW_MAX_PHI2=8000
     LOCIFW_EXFAT=1
     LOCIFW_BOARD="Rev 1.x"
+    EMBEDDED_TEST108K_ROM=1
+    EMBEDDED_EXTRA_ROMS=1
+    ACIA_ORIC_EXOS_COMPAT=1
 )
 if(DEFINED LOCIFW_VERSION)
     set_property(TARGET loci-firmware
