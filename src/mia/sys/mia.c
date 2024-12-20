@@ -314,7 +314,7 @@ const uint8_t __in_flash() mia_write_byte_patch[] = {
 };
 
 /* Basic autoload setup patch
-A9 22               LDA #$22    ;Put '"\0' in bÃÂuffer 
+A9 22               LDA #$22    ;Put '"\0' in buffer 
 85 35               STA $35
 A9 00               LDA #$00
 85 36               STA $36
@@ -810,7 +810,11 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                             IOREGSW(0x03B2) = ++rw_addr;
                         }
                         break;
-                    
+                    case CASE_WRITE(0x319):
+                        data = wait_act_data();
+                        //Disabled write for LOCI identity marker
+                        break;
+        
                     //Microdisc Device Read Register
                     case CASE_READ(DSK_IO_CMD):
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
@@ -1421,6 +1425,9 @@ void mia_init(void)
         mia_iopage_enable_map[1] |= (0x1UL << (i & 0x1F));
     }
    
+   //LOCI identity marker
+   IOREGS(0x0319) = 'L';
+
     mia_boot_settings = 0;
     mia_boot_state = MIA_IDLE;
 
