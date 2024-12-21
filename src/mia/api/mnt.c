@@ -11,9 +11,10 @@
 #include "oric/tap.h"
 #include "fatfs/ff.h"
 #include "sys/lfs.h"
+#include "sys/mia.h"
 #include <string.h>
 
-//4 drives + 1 tape mountable
+//4 drives + 1 tape + 1 ROM mountable
 #define MNT_FD_MAX 6
 FIL mnt_fd_fat[MNT_FD_MAX];
 lfs_file_t mnt_fd_lfs[MNT_FD_MAX];
@@ -93,6 +94,37 @@ void mnt_api_umount(void){
     if(drive < MNT_FD_MAX)
         mnt_status[drive] = UNMOUNTED;
     return api_return_ax(0);
+}
+
+void mnt_api_getcwd(void){
+    uint8_t drive = API_A;
+    uint8_t zero = 0x00;
+    uint8_t boot = mia_get_boot_settings();
+
+    if(drive == 255){                       //255 -> Derive boot device
+        if(mnt_status[5] != UNMOUNTED )     
+            drive = 5;                      //Pri 1 - Custom ROM
+        else if((boot & MIA_BOOTSET_FDC) && (mnt_status[0] != UNMOUNTED))
+            drive = 0;                      //Pri 2 - Boot DSK
+        else if((boot & MIA_BOOTSET_TAP) && (mnt_status[4] != UNMOUNTED))
+            drive = 4;                      //Pri 3 - TAP
+    }
+    if(drive >= MNT_FD_MAX){
+        return api_return_errno(API_ENOENT);
+    }else{
+        char* path = (char*)mnt_paths[drive];
+        char* path_end = strrchr(path,'/');
+        size_t len;
+        if(path_end)
+            len = path_end - path + 1;
+        else
+            len = strlen(path);
+        api_push_uint8(&zero);
+        api_push_n(path, len);
+        printf("%d:<%s>\n",len,&xstack[xstack_ptr]);
+        api_sync_xstack();
+        return api_return_ax(len);
+    }
 }
 
 void mnt_set_lost(uint8_t device){

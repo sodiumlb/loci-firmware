@@ -65,15 +65,12 @@ void mia_save_map_flags(void){
 }
 
 
-#define MIA_BOOTSET_FDC 0x01
-#define MIA_BOOTSET_TAP 0x02
-#define MIA_BOOTSET_B11 0x04
-#define MIA_BOOTSET_TAP_BIT 0x08
-#define MIA_BOOTSET_TAP_ALD 0x10
-#define MIA_BOOTSET_FAST 0x80
-#define MIA_BOOTSET_RESUME 0x40
 
 static uint8_t mia_boot_settings;
+
+uint8_t mia_get_boot_settings(void){
+    return mia_boot_settings;
+}
 
 static volatile uint32_t mia_io_errors;
 

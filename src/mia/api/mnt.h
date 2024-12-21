@@ -21,6 +21,10 @@ void mnt_stop(void);
 void mnt_api_mount(void);
 void mnt_api_umount(void);
 
+/* The API implementation for getcwd path information 
+*/
+void mnt_api_getcwd(void);
+
 /* For use in USB handler to track lost MSC devices
 */
 void mnt_set_lost(uint8_t device);
