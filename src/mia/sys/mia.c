@@ -698,7 +698,7 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         acia_write(data);
                         break;
                     case CASE_WRITE(ACIA_IO_STAT):
-                        //data = wait_act_data();
+                        data = wait_act_data();
                         acia_reset(false);
                         break;
                     case CASE_WRITE(ACIA_IO_CMD):
