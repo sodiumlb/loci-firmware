@@ -29,7 +29,6 @@
 void acia_init(void);
 void acia_task(void);
 void acia_stop();
-void acia_run();
 
 void __not_in_flash() acia_reset(bool hw_reset);
 void __not_in_flash() acia_clr_irq(void);
