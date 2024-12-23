@@ -134,7 +134,6 @@ static void run(void)
     //vga_run();
     api_run();
     //map_run();
-    acia_run();
     mia_run(); // Must be immediately before cpu
     cpu_run(); // Must be last
 }
