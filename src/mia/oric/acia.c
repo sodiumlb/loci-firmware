@@ -182,9 +182,6 @@ void acia_task(void){
     }
 }
 
-void acia_run(){
-}
-
 
 void acia_stop(){
     printf("acia_stop()\n");
