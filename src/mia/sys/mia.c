@@ -1070,6 +1070,7 @@ static void mia_read_pio_init(void)
     sm_config_set_in_shift(&config_a, false, true, 14);
     sm_config_set_jmp_pin(&config_a, A15_PIN);
     sm_config_set_set_pins(&config_a, DIR_PIN, 1);
+    sm_config_set_out_pins(&config_a, D_PIN_BASE, 8);
     
         //sm_config_set_out_special(&config, true, false, 0); //sticky output
     //for (int i = D_PIN_BASE; i < D_PIN_BASE + 8; i++)
@@ -1369,7 +1370,7 @@ void mia_init(void)
         //gpio_set_pulls(i, true, true);
         gpio_set_pulls(i, false, false);
         //gpio_set_input_hysteresis_enabled(i, false);
-        gpio_set_drive_strength(i, GPIO_DRIVE_STRENGTH_2MA);
+        //gpio_set_drive_strength(i, GPIO_DRIVE_STRENGTH_2MA);
     }
     //gpio_set_drive_strength(nIRQ_PIN, GPIO_DRIVE_STRENGTH_2MA);
     for (int i = D_PIN_BASE; i < D_PIN_BASE + 8; i++)
