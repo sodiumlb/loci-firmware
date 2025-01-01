@@ -23,7 +23,7 @@
 
 
 //Track buffer
-uint8_t dsk_buf[6400];
+volatile uint8_t dsk_buf[6400];
 
 //Oric MFM_DISK signature
 uint8_t dsk_signature[8] = "MFM_DISK";
@@ -40,7 +40,7 @@ typedef struct _dsk_drive_t {
 
 dsk_drive_t dsk_drives[4] = {{0}};
 
-struct {
+volatile struct {
     dsk_drive_t *drive;
     uint32_t side;
     uint32_t track;
@@ -301,7 +301,7 @@ typedef enum _DSK_CMD {  SEEK = 0,
     DSK_CLEANUP 
 }*/
 
-enum DSK_STATE dsk_state = DSK_IDLE;
+volatile enum DSK_STATE dsk_state = DSK_IDLE;
 //volatile enum DSK_STATE dsk_next_state = DSK_IDLE;
 
 void dsk_init(void){
