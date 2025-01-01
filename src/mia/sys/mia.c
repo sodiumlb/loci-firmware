@@ -601,7 +601,7 @@ inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool de
     //MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
     MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = ( (overlay_ram) ? PIO_OP_ON_C : PIO_OP_OFF );
     MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = ( (!device_rom && overlay_ram) ? PIO_OP_ON_E : PIO_OP_OFF );
-    
+    MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = (device_rom || basic_rom ? PIO_OP_ON_3 : PIO_OP_OFF);
     //device rom loaded in bank2, basic rom loaded in bank3
     //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
         //MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2) >> 14;
