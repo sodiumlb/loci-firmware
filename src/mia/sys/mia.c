@@ -684,7 +684,6 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         dsk_rw(true, data);
                         break;
                     case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
-                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq; // 
                         data = wait_act_data();
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
@@ -815,7 +814,6 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                     //Microdisc Device Read Register
                     case CASE_READ(DSK_IO_CMD):
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
-                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
                         dsk_reg_status &= 0b11111101;

@@ -23,7 +23,7 @@
 
 
 //Track buffer
-volatile uint8_t dsk_buf[6400];
+uint8_t dsk_buf[6400];
 
 //Oric MFM_DISK signature
 uint8_t dsk_signature[8] = "MFM_DISK";
@@ -40,7 +40,7 @@ typedef struct _dsk_drive_t {
 
 dsk_drive_t dsk_drives[4] = {{0}};
 
-volatile struct {
+struct {
     dsk_drive_t *drive;
     uint32_t side;
     uint32_t track;
@@ -103,14 +103,15 @@ volatile struct {
 
 //Status and CMD register are overlapped and can not be directy mapped
 volatile uint8_t        dsk_reg_status, 
-                        dsk_reg_cmd,
-                        dsk_reg_irq;
-volatile uint8_t        dsk_reg_ctrl;
-volatile uint8_t        dsk_next_status;
+                        dsk_reg_cmd;
+uint8_t                 dsk_reg_ctrl, 
+                        dsk_reg_ctrl_act;
+uint8_t                 dsk_next_status;
 #define dsk_reg_track  IOREGS(DSK_IO_TRACK)
 #define dsk_reg_sector IOREGS(DSK_IO_SECT)
 #define dsk_reg_data   IOREGS(DSK_IO_DATA)
 #define dsk_reg_drq    IOREGS(DSK_IO_DRQ)
+#define dsk_reg_irq    IOREGS(DSK_IO_CTRL)
 
 uint8_t dsk_cmd(uint8_t raw_cmd);
 bool dsk_flush_track(void);
@@ -270,7 +271,7 @@ extern volatile uint8_t dsk_reg_track,
                         dsk_req_irq;
 */
 
-volatile bool dsk_paused;
+bool dsk_paused;
 void dsk_set_status(uint8_t bit, bool val){
     if(val){
         dsk_reg_status |= bit;
@@ -300,7 +301,7 @@ typedef enum _DSK_CMD {  SEEK = 0,
     DSK_CLEANUP 
 }*/
 
-volatile enum DSK_STATE dsk_state = DSK_IDLE;
+enum DSK_STATE dsk_state = DSK_IDLE;
 //volatile enum DSK_STATE dsk_next_state = DSK_IDLE;
 
 void dsk_init(void){
@@ -401,7 +402,7 @@ bool dsk_set_active_sector(uint32_t sector){
     return false;
 }
 
-volatile uint32_t dsk_byte_cnt;
+uint32_t dsk_byte_cnt;
 
 void dsk_task(void){
     static uint8_t dsk_next_track = 0;
@@ -586,7 +587,6 @@ void dsk_task(void){
     }
 
     IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
-    IOREGS(DSK_IO_CTRL) = dsk_reg_irq;      //Not directly mapped due to combined with CTRL
 }
 
 //Stop activity but keep mounts

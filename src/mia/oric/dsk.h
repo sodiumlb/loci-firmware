@@ -36,7 +36,9 @@ void dsk_rw(bool is_write,uint8_t data);
 void dsk_set_ctrl(uint8_t raw_reg);
 void dsk_pause(bool on);
 
-extern volatile uint8_t dsk_reg_status, dsk_reg_cmd, dsk_reg_irq; 
+extern volatile uint8_t dsk_reg_status, dsk_reg_cmd;
+#define dsk_reg_irq    IOREGS(DSK_IO_CTRL)
+
 enum DSK_STATE { 
     DSK_IDLE, 
     DSK_SEEK, 
@@ -46,6 +48,6 @@ enum DSK_STATE {
     DSK_TOGGLE_IRQ,
     DSK_CLEANUP 
 };
-extern volatile enum DSK_STATE dsk_state;
+extern enum DSK_STATE dsk_state;
 
 #endif /* _DSK_H_ */
