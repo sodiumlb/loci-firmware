@@ -48,6 +48,6 @@ enum DSK_STATE {
     DSK_TOGGLE_IRQ,
     DSK_CLEANUP 
 };
-extern enum DSK_STATE dsk_state;
+extern volatile enum DSK_STATE dsk_state;
 
 #endif /* _DSK_H_ */
