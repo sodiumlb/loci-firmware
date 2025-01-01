@@ -435,12 +435,12 @@ void dsk_task(void){
                 //TODO: Read CLK, DDEN
                 uint8_t side = (ctrl_from_act >> 4) & 0x01;
                 uint8_t drive = (ctrl_from_act >> 5) & 0x03;
-                if(is_cmd && dsk_active.track_writeback && (  drive != dsk_active.drive_num 
+                bool busy = !!(dsk_reg_status & DSK_STAT_BUSY);
+                if(is_cmd && busy && dsk_active.track_writeback && (  drive != dsk_active.drive_num 
                                                     || side != dsk_active.side 
                                                     || dsk_next_track != dsk_active.track)){  
                     dsk_flush_track();
                 }
-                bool busy = !!(dsk_reg_status & DSK_STAT_BUSY);
                 if(is_cmd && busy){                         //Only trigger drive/side change together with command
                     dsk_set_active_drive(drive);
                     dsk_set_active_side(side);
