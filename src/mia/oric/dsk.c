@@ -570,8 +570,7 @@ void dsk_task(void){
             //printf("-toggle-");
             dsk_reg_irq = 0x00;     //Assert register IRQ
             //IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
-            dsk_state = DSK_CLEANUP;
-            break;
+            __attribute__((fallthrough));
         case DSK_CLEANUP:
             led_set(false);
             dsk_set_status(DSK_STAT_BUSY, false);
