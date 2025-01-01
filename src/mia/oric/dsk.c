@@ -23,7 +23,7 @@
 
 
 //Track buffer
-uint8_t dsk_buf[6400];
+volatile uint8_t dsk_buf[6400];
 
 //Oric MFM_DISK signature
 uint8_t dsk_signature[8] = "MFM_DISK";
@@ -40,7 +40,7 @@ typedef struct _dsk_drive_t {
 
 dsk_drive_t dsk_drives[4] = {{0}};
 
-struct {
+volatile struct {
     dsk_drive_t *drive;
     uint32_t side;
     uint32_t track;
@@ -301,7 +301,7 @@ typedef enum _DSK_CMD {  SEEK = 0,
     DSK_CLEANUP 
 }*/
 
-enum DSK_STATE dsk_state = DSK_IDLE;
+volatile enum DSK_STATE dsk_state = DSK_IDLE;
 //volatile enum DSK_STATE dsk_next_state = DSK_IDLE;
 
 void dsk_init(void){
@@ -423,11 +423,12 @@ void dsk_task(void){
                 dsk_reg_status = dsk_next_status;
             }
         */  
-            if(multicore_fifo_rvalid()){
+            while(multicore_fifo_rvalid()){
                 uint32_t raw_from_act = sio_hw->fifo_rd;
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
                 uint8_t ctrl_from_act = (uint8_t)((raw_from_act & 0x0000FF00) >> 8);
+                dsk_reg_ctrl = ctrl_from_act;
                 if(is_cmd)
                     dsk_next_track = dsk_cmd(cmd_from_act);
                 else
@@ -435,12 +436,12 @@ void dsk_task(void){
                 //TODO: Read CLK, DDEN
                 uint8_t side = (ctrl_from_act >> 4) & 0x01;
                 uint8_t drive = (ctrl_from_act >> 5) & 0x03;
-                if(is_cmd && dsk_active.track_writeback && (  drive != dsk_active.drive_num 
+                bool busy = !!(dsk_reg_status & DSK_STAT_BUSY);
+                if(is_cmd && busy && dsk_active.track_writeback && (  drive != dsk_active.drive_num 
                                                     || side != dsk_active.side 
                                                     || dsk_next_track != dsk_active.track)){  
                     dsk_flush_track();
                 }
-                bool busy = !!(dsk_reg_status & DSK_STAT_BUSY);
                 if(is_cmd && busy){                         //Only trigger drive/side change together with command
                     dsk_set_active_drive(drive);
                     dsk_set_active_side(side);
@@ -844,7 +845,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
 }
 
 void dsk_act(uint8_t raw_cmd){
-    sio_hw->fifo_wr = 0x80000000 | (dsk_reg_ctrl << 8) | raw_cmd;
+    sio_hw->fifo_wr = 0x80000000 | (dsk_reg_ctrl_act << 8) | raw_cmd;
     dsk_set_status(DSK_STAT_BUSY,true);
     IOREGS(DSK_IO_CMD) = dsk_reg_status;
 }
@@ -866,9 +867,9 @@ void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work her
 //Microdisc control register
 //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
 void dsk_set_ctrl(uint8_t raw_reg){
-    if((dsk_reg_ctrl ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
+    if((dsk_reg_ctrl_act ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
         sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
-    dsk_reg_ctrl = raw_reg;             
+    dsk_reg_ctrl_act = raw_reg;             
 /*
     //TODO: Read CLK, DDEN
     uint8_t side = (raw_reg >> 4) & 0x01;

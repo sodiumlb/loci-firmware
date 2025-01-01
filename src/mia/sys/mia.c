@@ -601,7 +601,7 @@ inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool de
     //MIA_MAP_PIO->ctrl = (MIA_MAP_PIO->ctrl & 0xf & ~(1u << MIA_MAP_SM2)) | (bool_to_bit(!device_rom && overlay_ram) << MIA_MAP_SM2);
     MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = ( (overlay_ram) ? PIO_OP_ON_C : PIO_OP_OFF );
     MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = ( (!device_rom && overlay_ram) ? PIO_OP_ON_E : PIO_OP_OFF );
-    
+    MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = (device_rom || basic_rom ? PIO_OP_ON_3 : PIO_OP_OFF);
     //device rom loaded in bank2, basic rom loaded in bank3
     //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
         //MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2) >> 14;
@@ -1161,55 +1161,13 @@ static void mia_io_read_pio_init(void)
     uint offset = pio_add_program(MIA_IO_READ_PIO, &mia_io_read_program);
     mia_io_read_prg_offset = offset;
     pio_sm_config config = mia_io_read_program_get_default_config(offset);
-    sm_config_set_in_pins(&config, A2_PIN);
-    sm_config_set_in_shift(&config, false, true, 6);
     sm_config_set_out_pins(&config, D_PIN_BASE, 8);
-    sm_config_set_out_shift(&config, true, true, 9);
     sm_config_set_set_pins(&config, DIR_PIN, 1);
-    //sm_config_set_out_special(&config, true, false, 0); //sticky output
-    sm_config_set_jmp_pin(&config, RnW_PIN);
-    //pio_gpio_init(RIA_WRITE_PIO, CPU_PHI2_PIN);
-    //for (int i = D_PIN_BASE; i < D_PIN_BASE + 8; i++)
-    //    pio_gpio_init(MIA_IO_READ_PIO, i);
-    //pio_gpio_init(MIA_READ_PIO, DIR_PIN);
     pio_sm_set_consecutive_pindirs(MIA_IO_READ_PIO, MIA_IO_READ_SM, DIR_PIN, 1, true);
     //pio_sm_set_consecutive_pindirs(MIA_WRITE_PIO, MIA_WRITE_SM, CPU_PHI2_PIN, 1, true);
     pio_sm_init(MIA_IO_READ_PIO, MIA_IO_READ_SM, offset, &config);
-    //pio_sm_put(MIA_IO_READ_PIO, MIA_IO_READ_SM, (uintptr_t)mia_iopage_enable_map >> 6);
-    //pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_pull(false, true));
-    //pio_sm_exec_wait_blocking(MIA_IO_READ_PIO, MIA_IO_READ_SM, pio_encode_mov(pio_x, pio_osr));
     pio_sm_set_enabled(MIA_IO_READ_PIO, MIA_IO_READ_SM, true);
 
-    // Need both channels now to configure chain ping-pong
-    int addr_chan = dma_claim_unused_channel(true);
-    int data_chan = dma_claim_unused_channel(true);
-
-    dma_channel_config data_dma = dma_channel_get_default_config(data_chan);
-    channel_config_set_high_priority(&data_dma, true);
-    channel_config_set_dreq(&data_dma, pio_get_dreq(MIA_IO_READ_PIO, MIA_IO_READ_SM, true));
-    channel_config_set_transfer_data_size(&data_dma, DMA_SIZE_8);
-    channel_config_set_chain_to(&data_dma, addr_chan);
-    dma_channel_configure(
-        data_chan,
-        &data_dma,
-        &MIA_IO_READ_PIO->txf[MIA_IO_READ_SM], // dst
-        xram,                            // src
-        1,
-        false);
-
-    // DMA move address from PIO into the data DMA config
-    dma_channel_config addr_dma = dma_channel_get_default_config(addr_chan);
-    channel_config_set_high_priority(&addr_dma, true);
-    channel_config_set_dreq(&addr_dma, pio_get_dreq(MIA_IO_READ_PIO, MIA_IO_READ_SM, false));
-    channel_config_set_read_increment(&addr_dma, false);
-    channel_config_set_chain_to(&addr_dma, data_chan);
-    dma_channel_configure(
-        addr_chan,
-        &addr_dma,
-        &dma_channel_hw_addr(data_chan)->read_addr, // dst
-        &MIA_IO_READ_PIO->rxf[MIA_IO_READ_SM],            // src
-        1,
-        true);
 }
 
 static void mia_rom_read_pio_init(void)
