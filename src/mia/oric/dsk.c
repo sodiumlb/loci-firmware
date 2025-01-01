@@ -423,7 +423,7 @@ void dsk_task(void){
                 dsk_reg_status = dsk_next_status;
             }
         */  
-            if(multicore_fifo_rvalid()){
+            while(multicore_fifo_rvalid()){
                 uint32_t raw_from_act = sio_hw->fifo_rd;
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
