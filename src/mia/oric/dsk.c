@@ -428,6 +428,7 @@ void dsk_task(void){
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
                 uint8_t ctrl_from_act = (uint8_t)((raw_from_act & 0x0000FF00) >> 8);
+                dsk_reg_ctrl = ctrl_from_act;
                 if(is_cmd)
                     dsk_next_track = dsk_cmd(cmd_from_act);
                 else
@@ -868,7 +869,7 @@ void __not_in_flash() dsk_rw(bool is_write, uint8_t data){  //data reg accessed.
 void __not_in_flash() dsk_set_ctrl(uint8_t raw_reg){
     if((dsk_reg_ctrl ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
         sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
-    dsk_reg_ctrl = raw_reg;             
+    dsk_reg_ctrl_act = raw_reg;             
 /*
     //TODO: Read CLK, DDEN
     uint8_t side = (raw_reg >> 4) & 0x01;
