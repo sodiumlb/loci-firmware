@@ -1104,6 +1104,8 @@ static void mia_read_pio_init(void)
     dma_channel_config data_dma = dma_channel_get_default_config(data_chan);
     channel_config_set_high_priority(&data_dma, true);
     channel_config_set_dreq(&data_dma, pio_get_dreq(MIA_READ_PIO, MIA_READ_DATA_SM, true));
+    channel_config_set_read_increment(&data_dma, false);
+    channel_config_set_write_increment(&data_dma, false);
     channel_config_set_transfer_data_size(&data_dma, DMA_SIZE_8);
     channel_config_set_chain_to(&data_dma, addr_chan);
     dma_channel_configure(
@@ -1119,6 +1121,7 @@ static void mia_read_pio_init(void)
     channel_config_set_high_priority(&addr_dma, true);
     channel_config_set_dreq(&addr_dma, pio_get_dreq(MIA_READ_PIO, MIA_READ_ADDR_SM, false));
     channel_config_set_read_increment(&addr_dma, false);
+    channel_config_set_write_increment(&addr_dma, false);
     channel_config_set_chain_to(&addr_dma, data_chan);
     dma_channel_configure(
         addr_chan,
@@ -1191,8 +1194,8 @@ static void mia_rom_read_pio_init(void)
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, ((0xC000 >> 14) << 4) | 0b0110 );    //ROM 16kB at 0xC000 + MAP,DIR,Phi2,RW match
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0x03 );    //Constant for multiple matching
     pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, 0xFF );    //Constant for multiple matching - start as off
-    pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM, pio_encode_pull(false, true));
-    pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM, pio_encode_mov(pio_x, pio_osr));
+    pio_sm_exec_wait_blocking(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, pio_encode_pull(false, true));
+    pio_sm_exec_wait_blocking(MIA_ROM_READ_PIO, MIA_ROM_READ_SM, pio_encode_mov(pio_x, pio_osr));
     //pio_sm_init(MIA_ROM_READ_PIO, MIA_ROM_READ_SM2, offset, &config);
     //pio_sm_put(MIA_ROM_READ_PIO, MIA_ROM_READ_SM2, 0xE000 >> 13);    //ROM 8kB at 0xE000
     //pio_sm_exec_wait_blocking(MIA_READ_PIO, MIA_ROM_READ_SM2, pio_encode_pull(false, true));
