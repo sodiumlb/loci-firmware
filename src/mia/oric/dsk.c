@@ -408,11 +408,6 @@ void dsk_task(void){
     static uint8_t dsk_next_track = 0;
     static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
-    
-    if((dsk_reg_ctrl & DSK_CTRL_IRQ_EN) && (dsk_reg_irq == 0x00) && !dsk_paused){     //Slow IO signal, just toggle it - fingers crossed
-        ext_pulse(EXT_IRQ);
-        //printf("[irq %d]",dsk_state);
-    }
 
     switch(dsk_state){
         case DSK_IDLE:
@@ -587,7 +582,19 @@ void dsk_task(void){
         dsk_reg_irq = 0x00; // Assert IRQ low
     }
 
+    if(dsk_state == DSK_TOGGLE_IRQ){    //Fast-track interrupt triggering
+            dsk_reg_irq = 0x00;     //Assert register IRQ
+            led_set(false);
+            dsk_set_status(DSK_STAT_BUSY, false);
+            dsk_state = DSK_IDLE;
+    }
+
     IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
+
+    if((dsk_reg_ctrl & DSK_CTRL_IRQ_EN) && (dsk_reg_irq == 0x00) && !dsk_paused){     //Slow IO signal, just toggle it - fingers crossed
+        ext_pulse(EXT_IRQ);
+        //printf("[irq %d]",dsk_state);
+    }
 }
 
 //Stop activity but keep mounts
