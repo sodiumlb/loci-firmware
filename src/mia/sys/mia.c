@@ -648,9 +648,8 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
             }
             */
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
+                (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                 if((mia_iopage_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F))){
-                    (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
-                    //(&dma_hw->ch[data_chan])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                     MIA_IO_READ_PIO->irq = 1u << 5;
                 }
             }
