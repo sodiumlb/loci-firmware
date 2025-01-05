@@ -102,11 +102,10 @@ volatile struct {
 
 
 //Status and CMD register are overlapped and can not be directy mapped
-volatile uint8_t        dsk_reg_status, 
+volatile uint8_t        dsk_reg_status, dsk_next_busy,
                         dsk_reg_cmd;
 uint8_t                 dsk_reg_ctrl, 
                         dsk_reg_ctrl_act;
-uint8_t                 dsk_next_status;
 #define dsk_reg_track  IOREGS(DSK_IO_TRACK)
 #define dsk_reg_sector IOREGS(DSK_IO_SECT)
 #define dsk_reg_data   IOREGS(DSK_IO_DATA)
@@ -333,7 +332,6 @@ void dsk_init(void){
     dsk_reg_drq = 0x80;     //Active low DRQ
 
     dsk_paused = false;
-    dsk_next_status = dsk_reg_status;
     
 }
 //volatile uint32_t dsk_next_track;
@@ -423,6 +421,7 @@ void dsk_task(void){
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
                 uint8_t ctrl_from_act = (uint8_t)((raw_from_act & 0x0000FF00) >> 8);
+                dsk_reg_sector = (uint8_t)((raw_from_act & 0x00FF0000) >> 16);
                 dsk_reg_ctrl = ctrl_from_act;
                 if(is_cmd)
                     dsk_next_track = dsk_cmd(cmd_from_act);
@@ -485,7 +484,8 @@ void dsk_task(void){
                 dsk_reg_drq = 0x80;
                 dsk_set_status(DSK_STAT_DRQ,false);
                 dsk_state = DSK_READ;
-                dsk_rw_countdown = dsk_active.data_len * 2;  //passes before we end the read
+                dsk_rw_countdown = dsk_active.data_len * 200;  //passes before we end the read
+                dsk_next_busy = DSK_STAT_BUSY;
                 //TODO Multi handling
             }else{
                 if(dsk_active.drive->type != EMPTY){
@@ -499,11 +499,15 @@ void dsk_task(void){
             if(dsk_reg_drq == 0x80){
                 if(dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
                     sleep_us(4);
-                    led_set(true);
                     //printf(".");
                     dsk_reg_data = dsk_buf[dsk_active.pos++];
+                    led_set(true);
                     dsk_reg_drq = 0x00;
                     dsk_set_status(DSK_STAT_DRQ,true);
+                    if(dsk_active.pos == (dsk_active.data_start + dsk_active.data_len))
+                        dsk_next_busy = 0x00;
+                    else
+                        dsk_next_busy = DSK_STAT_BUSY; 
                 }else{
                     //printf("+RExit %ld %ld %ld+",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
                     dsk_state = DSK_TOGGLE_IRQ;
