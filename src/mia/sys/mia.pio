@@ -61,10 +61,10 @@ isrom:
 
 .wrap_target
 start:
-    irq wait 5               ;wait on CPU signaling 
     mov osr !null            ;prepare pindirs
-    wait 1 gpio 25       [7] ;wait for phi2 raising edge
-    nop                  [0] ;<-io read timing adjust 0-7
+    irq wait 5               ;wait on CPU signaling
+    wait 1 gpio 25       [0] ;wait for phi2 raising edge
+    nop                  [0] ;<-io read timing adjust 0-31 (tiod)
     set pins 0
     out pindirs 8            ;enable data output
 .wrap
