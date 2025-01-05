@@ -614,7 +614,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-inline __attribute__((always_inline)) uint32_t wait_act_data(void){
+inline __attribute__((always_inline)) uint8_t wait_act_data(void){
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -660,7 +660,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                 within the case section.
             */
             
-            uint32_t data;
+            uint8_t data;
+
                 switch(rw_data_addr & 0x010000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
