@@ -563,7 +563,7 @@ void mia_verify_buf(uint16_t addr)
     action_state = action_state_verify;
     main_run();
 }
-
+static uint8_t prev_ctrl;
 void mia_write_buf(uint16_t addr)
 {
     assert(!cpu_active());
@@ -614,7 +614,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-inline __attribute__((always_inline)) uint32_t wait_act_data(void){
+inline __attribute__((always_inline)) uint8_t wait_act_data(void){
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -648,9 +648,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             }
             */
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
+                (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                 if((mia_iopage_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F))){
-                    (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
-                    //(&dma_hw->ch[data_chan])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
                     MIA_IO_READ_PIO->irq = 1u << 5;
                 }
             }
@@ -661,7 +660,9 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                 within the case section.
             */
             
-            uint32_t data;
+            uint8_t data;
+            uint8_t dsk_reg_status_act;
+            uint8_t dsk_reg_sector_act;
                 switch(rw_data_addr & 0x010000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
@@ -670,26 +671,39 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         break;
                     //Microdisc Device Write Registers
                     case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
+                        dsk_reg_status_act = dsk_reg_status;
+                        dsk_reg_sector_act = IOREGS(DSK_IO_SECT);
                         dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
-                        IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
+                        dsk_reg_status_act |= 0x01;     //Busy
+                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
+                        dsk_reg_status = dsk_reg_status_act;
                         data = wait_act_data();
-                        dsk_act(data);              //Process command
+                        //dsk_act(data);              //Process command
+                        sio_hw->fifo_wr = 0x80000000 | (dsk_reg_sector_act << 16) | (prev_ctrl << 8) | data;
                         break;
                     case CASE_WRITE(DSK_IO_DATA):
-                        dsk_reg_status &= 0b11111101;
-                        IOREGS(DSK_IO_CMD) = dsk_reg_status;
+                        dsk_reg_status_act = dsk_reg_status;
+                        dsk_reg_sector_act = IOREGS(DSK_IO_SECT);
+                        dsk_reg_status_act &= 0b11111101;
+                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
                         IOREGS(DSK_IO_DRQ) = 0x80;
+                        dsk_reg_status = dsk_reg_status_act;
                         data = wait_act_data();
                         IOREGS(DSK_IO_DATA) = data;
                         dsk_rw(true, data);
                         break;
                     case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
+                        dsk_reg_status_act = dsk_reg_status;
+                        dsk_reg_sector_act = IOREGS(DSK_IO_SECT);
                         data = wait_act_data();
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
                         //[1] 0:basic rom disabled
                         mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
-                        dsk_set_ctrl(data); //Handling of DSK related bits
+                        //dsk_set_ctrl(data); //Handling of DSK related bits
+                        if((prev_ctrl ^ data) & 0x7d)                  //Only send changed dsk bits
+                            sio_hw->fifo_wr = 0x00000000 | (dsk_reg_sector_act << 16)| (data << 8);   //Transfer with CMD in dsk_act
+                        prev_ctrl = data;    
                         break;
                     //ACIA Device Write Registers 0x380-0x383
                     case CASE_WRITE(ACIA_IO_DATA):
@@ -816,10 +830,13 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
-                        dsk_reg_status &= 0b11111101;
-                        IOREGS(DSK_IO_CMD) = dsk_reg_status;
+                        dsk_reg_status_act = dsk_reg_status;
+                        dsk_reg_status_act &= 0b11111100;
+                        dsk_reg_status_act |= dsk_next_busy;
+                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
+                        dsk_reg_status = dsk_reg_status_act;
                         IOREGS(DSK_IO_DRQ) = 0x80;
-                        dsk_rw(false,0x00);
+                        //dsk_rw(false,0x00);
                         break;
                     case CASE_READ(DSK_IO_DRQ):
                         break;
