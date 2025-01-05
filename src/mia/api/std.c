@@ -266,6 +266,7 @@ void std_api_read_xram(void)
             API_ERRNO = API_ELFSFS(lfsresult);
             api_set_ax(-1);
         }else{
+            api_set_ax(lfsresult);
             std_xram_count = lfsresult;
         }
     }else{
