@@ -796,8 +796,6 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                             IOREGS(0x03A0) &= ~0b10000000;
                         break;
                     case CASE_WRITE(0x03BD): // action read
-                        data = wait_act_data();
-                        mbuf[rw_pos] = data;
                         if (++rw_pos >= rw_end){
                             IOREGS(0x03B9) = 0xFE;
                             reset_requested = true;
@@ -806,7 +804,9 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                         }else{
                             IOREGSW(0x03B2) = ++rw_addr;
                         }
-                        break;
+                        data = wait_act_data();
+                        mbuf[rw_pos-1] = data;
+                        break;                        
                     case CASE_WRITE(0x03BC): // action verify
                         data = wait_act_data();
                         if (mbuf[rw_pos] != data && action_result < 0)
