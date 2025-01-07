@@ -11,10 +11,10 @@
 .program mia_action
 
 start:
-    wait 1 gpio 25  [31]
+    wait 1 gpio 25  [20]
 .wrap_target
     wait 0 gpio 25  [15] ;wait for phi2 negative edge + setup
-    nop             [0]  ;<- act read timing adjust 0-31
+    nop             [0]  ;<- act read timing adjust 0-31 (tior)
     mov osr pins
     out null 8           ;Spool out A[7:0]
     out x 8              ;Get page address A[15:8]
@@ -23,9 +23,9 @@ start:
     jmp pin iswrite      ;Handle writes later
     jmp start            ;
 iswrite:                 ;Writes needs data to be stable (phi2 high)
-    wait 1 gpio 25  [20] ;Delay needed for stable data sampling 
-    nop             [0]  ;<- act write timing adjust 0-31
-    in pins 25      [15] ;Get RnW,D[7:0]:A[15:0] (autopush)
+    wait 1 gpio 25  [15] ;Delay needed for stable data sampling 
+    nop             [0]  ;<- act write timing adjust 0-31 (tiow)
+    in pins 25      [0] ;Get RnW,D[7:0]:A[15:0] (autopush)
 .wrap
 
 ; Async ROM and IO data read emulation
