@@ -421,7 +421,7 @@ void dsk_task(void){
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
                 uint8_t ctrl_from_act = (uint8_t)((raw_from_act & 0x0000FF00) >> 8);
-                dsk_reg_sector = (uint8_t)((raw_from_act & 0x00FF0000) >> 16);
+
                 dsk_reg_ctrl = ctrl_from_act;
                 if(is_cmd)
                     dsk_next_track = dsk_cmd(cmd_from_act);
