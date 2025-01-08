@@ -259,6 +259,8 @@ bool main_api(uint8_t operation)
     case 0x82:
         dir_api_readdir();
         break;
+    case 0x83:
+        dir_api_mkdir();
     case 0x88:
         mnt_api_getcwd();
         break;
