@@ -21,6 +21,6 @@ void dir_stop(void);
 void dir_api_opendir(void);
 void dir_api_closedir(void);
 void dir_api_readdir(void);
-void dir_api_readdir(void);
+void dir_api_mkdir(void);
 
 #endif /* _DIR_H_ */
