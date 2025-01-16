@@ -441,6 +441,7 @@ void dsk_task(void){
                 if(is_cmd && busy){                         //Only trigger drive/side change together with command
                     dsk_set_active_drive(drive);
                     dsk_set_active_side(side);
+                    dsk_index_countdown = 255;
                 }
 
                 if(is_cmd && busy && dsk_active.buf_update_needed){     //Only trigger track update when BUSY
@@ -506,6 +507,7 @@ void dsk_task(void){
                     led_set(true);
                     dsk_reg_drq = 0x00;
                     dsk_set_status(DSK_STAT_DRQ,true);
+                    dsk_index_countdown = 255;
                     if(dsk_active.pos == (dsk_active.data_start + dsk_active.data_len))
                         dsk_next_busy = 0x00;
                     else
@@ -559,14 +561,16 @@ void dsk_task(void){
             break;
         case DSK_READ_ADDR:
             if(dsk_active.drive->type != EMPTY){
-                do {
-                    dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
-                }while(dsk_active.data_start == 0);
-
-                dsk_active.data_len = 6;
-                //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
-                dsk_active.pos = dsk_active.data_start;
-                dsk_state = DSK_READ;
+                dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
+                if(dsk_active.data_start != 0){
+                    dsk_active.data_len = 6;
+                    //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
+                    dsk_active.pos = dsk_active.data_start;
+                    dsk_state = DSK_READ;
+                }else if(dsk_index_countdown == 0){
+                    dsk_set_status(DSK_STAT_RNF,true);
+                    dsk_state = DSK_TOGGLE_IRQ;
+                }
             }
             break;
         case DSK_TOGGLE_IRQ:
