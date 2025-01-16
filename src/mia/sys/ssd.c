@@ -25,9 +25,9 @@ static uint8_t ssd_ssd1306_addrs[] = { 0x3C, 0x3D };
 #define SSD_FB_COLS (SSD_FB_WIDTH/SSD_FONT_WIDTH)
 #define SSD_FB_ROWS (SSD_FB_HEIGHT/8)
 
-static uint8_t ssd_framebuffer_tx[1025];
-//extern volatile uint8_t ssd_framebuffer_tx[1025];
-//asm(".equ ssd_framebuffer_tx, 0x20001000");
+//static uint8_t ssd_framebuffer_tx[1025];
+extern volatile uint8_t ssd_framebuffer_tx[1025];
+asm(".equ ssd_framebuffer_tx, 0x20040500");
 
 static bool ssd_is_present = false;
 static volatile uint8_t *ssd_framebuffer = &ssd_framebuffer_tx[1];
@@ -357,7 +357,10 @@ void ssd_init(void)
 void ssd_task(void)
 {
     if(ssd_got_action_word){
-        printf("##%08lx##", ssd_action_is_wr ? ssd_action_word : ssd_action_rword);
+        if((ssd_action_rword & 0xFFFF) == 0x0381 && !ssd_action_is_wr)
+            printf("%02x ", (int)((ssd_action_rword >> 16) & 0xFF));
+        else
+            printf("##%08lx %08lx", ssd_action_word, ssd_action_rword);
         ssd_got_action_word = false;
     }
     ssd_tx_framebuffer();
