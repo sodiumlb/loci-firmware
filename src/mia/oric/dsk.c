@@ -419,6 +419,7 @@ void dsk_task(void){
     static uint8_t dsk_next_track = 0;
     static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
+    static uint8_t irq_retry_countdown = 0;
 
     switch(dsk_state){
         case DSK_IDLE:
