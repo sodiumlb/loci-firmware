@@ -48,6 +48,7 @@ volatile struct {
     uint32_t pos;
     uint32_t data_start;
     uint32_t data_len;
+    uint16_t crc;
     uint8_t drive_num;
     //uint8_t *data_ptr;
     bool step_dir_out;
@@ -55,6 +56,7 @@ volatile struct {
     bool sector_dm;
     bool buf_update_needed;
     bool track_writeback;
+    bool formating;
 } dsk_active;
 
 volatile uint32_t* dsk_active_pos = &dsk_active.pos;
@@ -116,6 +118,15 @@ uint8_t                 dsk_reg_cmd,
 
 uint8_t dsk_cmd(uint8_t raw_cmd);
 bool dsk_flush_track(void);
+
+uint16_t dsk_crc16(uint16_t crc, uint8_t data){
+    crc = (uint8_t)(crc >>8) | (crc << 8);
+    crc ^= data;
+    crc ^= ((uint8_t)(crc & 0xFF)) >> 4;
+    crc ^= (crc << 8) << 4;
+    crc ^= ((crc & 0xFF) << 4) << 1;
+    return crc;
+}
 
 //Assumes file has been opened first
 bool dsk_mount_lfs(uint8_t drive, lfs_file_t *lfs_file){
@@ -525,6 +536,7 @@ void dsk_task(void){
         case DSK_WRITE_PREP:
             if(dsk_set_active_sector(dsk_reg_sector)){
                 //printf("WS:%ld:%ld",dsk_active.track,dsk_active.sector);
+                dsk_active.formating = false;
                 dsk_active.pos = dsk_active.data_start;
                 dsk_reg_drq = 0x00;
                 dsk_set_status(DSK_STAT_DRQ,true);
@@ -541,6 +553,23 @@ void dsk_task(void){
             break;
         case DSK_WRITE:
             if(dsk_reg_drq == 0x80){
+                if(dsk_active.formating){
+                    switch(dsk_buf[dsk_active.pos]){
+                        case(0xF5):
+                            dsk_buf[dsk_active.pos] = 0xA1;
+                            dsk_active.crc = 0x968B;
+                            break;
+                        case(0xF6):
+                            dsk_buf[dsk_active.pos] = 0xC2;
+                            break;
+                        case(0xF7):
+                            dsk_buf[dsk_active.pos] = (dsk_active.crc >> 8);
+                            dsk_buf[++dsk_active.pos] = (dsk_active.crc & 0xFF);
+                            break;
+                        default:
+                    }
+                }
+                dsk_active.crc = dsk_crc16(dsk_active.crc, dsk_buf[dsk_active.pos]);
                 if(++dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
                     led_set(true);
                     //printf(".");
@@ -551,6 +580,7 @@ void dsk_task(void){
                     dsk_active.track_writeback = true;
                 }else{
                     //printf("+RExit %ld %ld %ld+",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
+                    dsk_flush_track();
                     dsk_state = DSK_TOGGLE_IRQ;
                 }
             }else{
@@ -837,6 +867,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                 dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
                 if(cmd_flags & DSK_FLAG_IS_WRITE){
+                    dsk_active.formating = true;
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
