@@ -57,6 +57,8 @@ volatile struct {
     bool track_writeback;
 } dsk_active;
 
+volatile uint32_t* dsk_active_pos = &dsk_active.pos;
+
 //Type I flags
 #define DSK_FLAG_IS_SEEK   (0b00010000)
 #define DSK_FLAG_UPD_TRACK (0b00010000)
@@ -102,10 +104,10 @@ volatile struct {
 
 
 //Status and CMD register are overlapped and can not be directy mapped
-volatile uint8_t        dsk_reg_status, dsk_next_busy,
-                        dsk_reg_cmd;
-uint8_t                 dsk_reg_ctrl, 
-                        dsk_reg_ctrl_act;
+volatile uint8_t        dsk_next_busy;
+uint8_t                 dsk_reg_cmd,
+                        dsk_reg_ctrl, dsk_reg_ctrl_act;
+#define dsk_reg_status IOREGS(DSK_IO_CMD)
 #define dsk_reg_track  IOREGS(DSK_IO_TRACK)
 #define dsk_reg_sector IOREGS(DSK_IO_SECT)
 #define dsk_reg_data   IOREGS(DSK_IO_DATA)
@@ -537,7 +539,7 @@ void dsk_task(void){
             break;
         case DSK_WRITE:
             if(dsk_reg_drq == 0x80){
-                if(dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
+                if(++dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
                     led_set(true);
                     //printf(".");
                     //Write ops moved to dsk_rw() for multicore safety. 
@@ -834,12 +836,16 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
+                    dsk_active.pos = 0;
+                    dsk_reg_drq = 0x00;
+                    dsk_set_status(DSK_STAT_DRQ,true);
                     dsk_state = DSK_WRITE;
                 }else{
                 //Read track
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
+                    dsk_active.pos = 0;
                     dsk_state = DSK_READ;
                 }
                 break;
@@ -850,42 +856,6 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         };
 
     }
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
     //printf("%s %02x %02x\n", dsk_state_id[dsk_state], raw_cmd, dsk_next_track);
     return dsk_next_track;
-}
-
-void dsk_act(uint8_t raw_cmd){
-    sio_hw->fifo_wr = 0x80000000 | (dsk_reg_ctrl_act << 8) | raw_cmd;
-    dsk_set_status(DSK_STAT_BUSY,true);
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;
-}
-
-void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work here
-    //dsk_reg_drq = 0x80; //active low
-    //dsk_set_status(DSK_STAT_DRQ,false);
-    //IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
-    if(is_write && dsk_state == DSK_WRITE){
-        dsk_buf[dsk_active.pos++] = data;
-    }
-   /* if(dsk_state == DSK_READ || dsk_state == DSK_WRITE){
-        dsk_byte_cnt++;
-        dsk_active.pos++;
-    }
-    */
-}
-
-//Microdisc control register
-//Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
-void dsk_set_ctrl(uint8_t raw_reg){
-    if((dsk_reg_ctrl_act ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
-        sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
-    dsk_reg_ctrl_act = raw_reg;             
-/*
-    //TODO: Read CLK, DDEN
-    uint8_t side = (raw_reg >> 4) & 0x01;
-    uint8_t drive = (raw_reg >> 5) & 0x03;
-    dsk_set_active_drive(drive);
-    dsk_set_active_side(side);
-*/
 }
