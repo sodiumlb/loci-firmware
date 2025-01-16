@@ -87,7 +87,7 @@ start:
     jmp x!=y start           ;if not MAP,DIR,Phi2 right then jump to start
     mov osr !null       [0]  ;prepare pindirs = 0xff
     set pins 0
-    out pindirs 8            ;enable data output and DIR B->A. disabled in mia_io_read
+    out pindirs 8            ;enable data output and DIR B->A. disabled in mia_read_addr
 .wrap
 
 ; Oric MAP signal timing
@@ -105,8 +105,8 @@ start:
     jmp !y start             ;jump if zero
     mov osr pins             ;ca 70 cycles delay before setting MAP
     out y 3            [20]  ;get A[15:13]
-    jmp x!=y start     [10]  ;check matching address <- MAP/RV1 timing adjust 0-31
-    ;nop                [10]  ;
+    jmp x!=y start     [10]  ;check matching address <- MAP/RV1 timing adjust 0-31 (tmap)
+    ;nop               [10]  ;
 ismap:
     set pins 1         [30]  ;Delay equals MAP pulse width
     set pins 0  
@@ -143,7 +143,7 @@ ismap:
 skip:
     wait 1 gpio 25 [20] ;wait for phi2 raising edge
     wait 0 gpio 25 [30] ;wait for phi2 falling edge
-    nop            [10] ;<-ULA timing adjuts (0-31) 
+    nop            [10] ;<-ULA timing adjuts (0-31) (tula)
     pull noblock        ;Update pattern if available
     mov x osr           ;Pattern in x
     mov y isr           ;Copy all bytes to y
