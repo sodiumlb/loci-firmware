@@ -614,7 +614,8 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-inline __attribute__((always_inline)) uint8_t wait_act_data(void){
+static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
+    __compiler_memory_barrier();
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
