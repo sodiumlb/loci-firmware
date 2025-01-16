@@ -42,17 +42,17 @@ iswrite:                 ;Writes needs data to be stable (phi2 high)
 
 .program mia_read_addr
 isrom:
+    mov isr x            [0] ; ROM page cortex base address
     in pins 14           [7] ;input address (auto-push)   
 .wrap_target
-    wait 1 gpio 25       [7] ;wait for phi2 raising edge
-    pull noblock         [7]
-    ;mov x osr
-    out x 32             [7] ;same as <mov x osr> but clears osr for later use as zero
+    wait 1 gpio 25      [15] ;wait for phi2 raising edge
     wait 0 gpio 25       [7] ;wait for phi2 falling edge + A setup-time
     out pindirs 8            ;disable data output
-    set pins 1           [6]
-    mov isr x           [14] ; ROM page cortex base address
-    nop                  [0] ;<- read addr timing adjust 0-31
+    set pins 1           [17]
+    pull noblock         
+    ;mov x osr
+    out x 32                 ;same as <mov x osr> but clears osr for later use as zero
+    nop                  [0] ;<- read addr timing adjust 0-31 (tadr)
     jmp pin isrom            ; Test A[15] 0=IO 1=ROM
 .wrap
 
