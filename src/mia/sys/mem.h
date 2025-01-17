@@ -63,5 +63,6 @@ asm(".equ regs, 0x200400A0");   //Oric address 0x03A0-0x03BF
 #define MBUF_SIZE 1024
 extern uint8_t mbuf[];
 extern size_t mbuf_len;
+asm(".equ mbuf, 0x20040100");
 
 #endif /* _MEM_H_ */

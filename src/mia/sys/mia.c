@@ -614,7 +614,8 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-inline __attribute__((always_inline)) uint8_t wait_act_data(void){
+static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
+    __compiler_memory_barrier();
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -661,7 +662,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             */
             
             uint8_t data;
-            uint8_t dsk_reg_status_act;
+            volatile uint8_t sink;
                 switch(rw_data_addr & 0x010000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
@@ -670,27 +671,24 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         break;
                     //Microdisc Device Write Registers
                     case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
-                        dsk_reg_status_act = dsk_reg_status;
                         dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
-                        dsk_reg_status_act |= 0x01;     //Busy
-                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
-                        dsk_reg_status = dsk_reg_status_act;
+                        dsk_reg_status |= 0x01;     //Busy
                         data = wait_act_data();
                         //dsk_act(data);              //Process command
                         sio_hw->fifo_wr = 0x80000000 | (prev_ctrl << 8) | data;
                         break;
                     case CASE_WRITE(DSK_IO_DATA):
-                        dsk_reg_status_act = dsk_reg_status;
-                        dsk_reg_status_act &= 0b11111101;
-                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
-                        IOREGS(DSK_IO_DRQ) = 0x80;
-                        dsk_reg_status = dsk_reg_status_act;
-                        data = wait_act_data();
-                        IOREGS(DSK_IO_DATA) = data;
-                        dsk_rw(true, data);
+                        if(dsk_state == DSK_WRITE){
+                            dsk_reg_status &= 0b11111101;
+                            IOREGS(DSK_IO_DRQ) = 0x80;          //After data write to synch with dsk_task()
+                            data = wait_act_data();
+                            dsk_buf[*dsk_active_pos] = data;
+                        }else{
+                            data = wait_act_data();
+                            IOREGS(DSK_IO_DATA) = data;
+                        }
                         break;
                     case CASE_WRITE(DSK_IO_CTRL):   //CTRL and IRQ are overlayed
-                        dsk_reg_status_act = dsk_reg_status;
                         data = wait_act_data();
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
@@ -826,15 +824,9 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
-                        dsk_reg_status_act = dsk_reg_status;
-                        dsk_reg_status_act &= 0b11111100;
-                        dsk_reg_status_act |= dsk_next_busy;
-                        IOREGS(DSK_IO_CMD) = dsk_reg_status_act;
-                        dsk_reg_status = dsk_reg_status_act;
+                        dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
                         IOREGS(DSK_IO_DRQ) = 0x80;
                         //dsk_rw(false,0x00);
-                        break;
-                    case CASE_READ(DSK_IO_DRQ):
                         break;
                     //ACIA Device Read Registers 0x380-0x383
                     case CASE_READ(ACIA_IO_DATA):
@@ -906,10 +898,14 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         break;
                     default:
                         //Default register write handling
-                        if(rw_data_addr & 0x01000000)
-                            IOREGS(rw_data_addr & 0xFFFF) = wait_act_data();
+                        if(rw_data_addr & 0x01000000){
+                            data = wait_act_data();
+                            IOREGS(rw_data_addr & 0xFFFF) = data;
+
+                        }
                         break;
             }
+            sink = data;        //Avoid wait_act_data() calls to be optimised away
                         /*
                         case CASE_WRITE(0x03B0): // IRQ Enable
                             irq_enabled = data;

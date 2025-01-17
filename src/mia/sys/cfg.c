@@ -113,7 +113,6 @@ static void cfg_save_with_boot_opt(char *opt_str)
 static void cfg_load_with_boot_opt(bool boot_only)
 {
     lfs_file_t lfs_file;
-    LFS_FILE_CONFIG(lfs_file_config);
     int lfsresult = lfs_file_opencfg(&lfs_volume, &lfs_file, filename,
                                      LFS_O_RDONLY, lfs_alloc_file_config());
     mbuf[0] = 0;

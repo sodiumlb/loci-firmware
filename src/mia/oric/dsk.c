@@ -48,6 +48,7 @@ volatile struct {
     uint32_t pos;
     uint32_t data_start;
     uint32_t data_len;
+    uint16_t crc;
     uint8_t drive_num;
     //uint8_t *data_ptr;
     bool step_dir_out;
@@ -55,7 +56,10 @@ volatile struct {
     bool sector_dm;
     bool buf_update_needed;
     bool track_writeback;
+    bool formating;
 } dsk_active;
+
+volatile uint32_t* dsk_active_pos = &dsk_active.pos;
 
 //Type I flags
 #define DSK_FLAG_IS_SEEK   (0b00010000)
@@ -102,10 +106,10 @@ volatile struct {
 
 
 //Status and CMD register are overlapped and can not be directy mapped
-volatile uint8_t        dsk_reg_status, dsk_next_busy,
-                        dsk_reg_cmd;
-uint8_t                 dsk_reg_ctrl, 
-                        dsk_reg_ctrl_act;
+volatile uint8_t        dsk_next_busy;
+uint8_t                 dsk_reg_cmd,
+                        dsk_reg_ctrl, dsk_reg_ctrl_act;
+#define dsk_reg_status IOREGS(DSK_IO_CMD)
 #define dsk_reg_track  IOREGS(DSK_IO_TRACK)
 #define dsk_reg_sector IOREGS(DSK_IO_SECT)
 #define dsk_reg_data   IOREGS(DSK_IO_DATA)
@@ -114,6 +118,15 @@ uint8_t                 dsk_reg_ctrl,
 
 uint8_t dsk_cmd(uint8_t raw_cmd);
 bool dsk_flush_track(void);
+
+uint16_t dsk_crc16(uint16_t crc, uint8_t data){
+    crc = (uint8_t)(crc >>8) | (crc << 8);
+    crc ^= data;
+    crc ^= ((uint8_t)(crc & 0xFF)) >> 4;
+    crc ^= (crc << 8) << 4;
+    crc ^= ((crc & 0xFF) << 4) << 1;
+    return crc;
+}
 
 //Assumes file has been opened first
 bool dsk_mount_lfs(uint8_t drive, lfs_file_t *lfs_file){
@@ -406,6 +419,7 @@ void dsk_task(void){
     static uint8_t dsk_next_track = 0;
     static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
+    static uint8_t irq_retry_countdown = 0;
 
     switch(dsk_state){
         case DSK_IDLE:
@@ -439,6 +453,7 @@ void dsk_task(void){
                 if(is_cmd && busy){                         //Only trigger drive/side change together with command
                     dsk_set_active_drive(drive);
                     dsk_set_active_side(side);
+                    dsk_index_countdown = 255;
                 }
 
                 if(is_cmd && busy && dsk_active.buf_update_needed){     //Only trigger track update when BUSY
@@ -504,6 +519,7 @@ void dsk_task(void){
                     led_set(true);
                     dsk_reg_drq = 0x00;
                     dsk_set_status(DSK_STAT_DRQ,true);
+                    dsk_index_countdown = 255;
                     if(dsk_active.pos == (dsk_active.data_start + dsk_active.data_len))
                         dsk_next_busy = 0x00;
                     else
@@ -521,6 +537,7 @@ void dsk_task(void){
         case DSK_WRITE_PREP:
             if(dsk_set_active_sector(dsk_reg_sector)){
                 //printf("WS:%ld:%ld",dsk_active.track,dsk_active.sector);
+                dsk_active.formating = false;
                 dsk_active.pos = dsk_active.data_start;
                 dsk_reg_drq = 0x00;
                 dsk_set_status(DSK_STAT_DRQ,true);
@@ -537,7 +554,24 @@ void dsk_task(void){
             break;
         case DSK_WRITE:
             if(dsk_reg_drq == 0x80){
-                if(dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
+                if(dsk_active.formating){
+                    switch(dsk_buf[dsk_active.pos]){
+                        case(0xF5):
+                            dsk_buf[dsk_active.pos] = 0xA1;
+                            dsk_active.crc = 0x968B;
+                            break;
+                        case(0xF6):
+                            dsk_buf[dsk_active.pos] = 0xC2;
+                            break;
+                        case(0xF7):
+                            dsk_buf[dsk_active.pos] = (dsk_active.crc >> 8);
+                            dsk_buf[++dsk_active.pos] = (dsk_active.crc & 0xFF);
+                            break;
+                        default:
+                    }
+                }
+                dsk_active.crc = dsk_crc16(dsk_active.crc, dsk_buf[dsk_active.pos]);
+                if(++dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
                     led_set(true);
                     //printf(".");
                     //Write ops moved to dsk_rw() for multicore safety. 
@@ -547,6 +581,7 @@ void dsk_task(void){
                     dsk_active.track_writeback = true;
                 }else{
                     //printf("+RExit %ld %ld %ld+",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
+                    dsk_flush_track();
                     dsk_state = DSK_TOGGLE_IRQ;
                 }
             }else{
@@ -557,14 +592,16 @@ void dsk_task(void){
             break;
         case DSK_READ_ADDR:
             if(dsk_active.drive->type != EMPTY){
-                do {
-                    dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
-                }while(dsk_active.data_start == 0);
-
-                dsk_active.data_len = 6;
-                //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
-                dsk_active.pos = dsk_active.data_start;
-                dsk_state = DSK_READ;
+                dsk_active.data_start = dsk_seek_next_idam(dsk_active.data_start);
+                if(dsk_active.data_start != 0){
+                    dsk_active.data_len = 6;
+                    //dsk_active.data_ptr = (uint8_t *)(dsk_buf + dsk_active.pos);
+                    dsk_active.pos = dsk_active.data_start;
+                    dsk_state = DSK_READ;
+                }else if(dsk_index_countdown == 0){
+                    dsk_set_status(DSK_STAT_RNF,true);
+                    dsk_state = DSK_TOGGLE_IRQ;
+                }
             }
             break;
         case DSK_TOGGLE_IRQ:
@@ -831,15 +868,20 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                 dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
                 if(cmd_flags & DSK_FLAG_IS_WRITE){
+                    dsk_active.formating = true;
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
+                    dsk_active.pos = 0;
+                    dsk_reg_drq = 0x00;
+                    dsk_set_status(DSK_STAT_DRQ,true);
                     dsk_state = DSK_WRITE;
                 }else{
                 //Read track
                     dsk_active.data_len = 6400;
                     //dsk_active.data_ptr = (uint8_t *)(dsk_buf);
                     dsk_active.data_start = 0;
+                    dsk_active.pos = 0;
                     dsk_state = DSK_READ;
                 }
                 break;
@@ -850,42 +892,6 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         };
 
     }
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
     //printf("%s %02x %02x\n", dsk_state_id[dsk_state], raw_cmd, dsk_next_track);
     return dsk_next_track;
-}
-
-void dsk_act(uint8_t raw_cmd){
-    sio_hw->fifo_wr = 0x80000000 | (dsk_reg_ctrl_act << 8) | raw_cmd;
-    dsk_set_status(DSK_STAT_BUSY,true);
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;
-}
-
-void dsk_rw(bool is_write, uint8_t data){  //data reg accessed. minimum work here
-    //dsk_reg_drq = 0x80; //active low
-    //dsk_set_status(DSK_STAT_DRQ,false);
-    //IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
-    if(is_write && dsk_state == DSK_WRITE){
-        dsk_buf[dsk_active.pos++] = data;
-    }
-   /* if(dsk_state == DSK_READ || dsk_state == DSK_WRITE){
-        dsk_byte_cnt++;
-        dsk_active.pos++;
-    }
-    */
-}
-
-//Microdisc control register
-//Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
-void dsk_set_ctrl(uint8_t raw_reg){
-    if((dsk_reg_ctrl_act ^ raw_reg) & 0x7d)                  //Only send changed dsk bits
-        sio_hw->fifo_wr = 0x00000000 | (raw_reg << 8);   //Transfer with CMD in dsk_act
-    dsk_reg_ctrl_act = raw_reg;             
-/*
-    //TODO: Read CLK, DDEN
-    uint8_t side = (raw_reg >> 4) & 0x01;
-    uint8_t drive = (raw_reg >> 5) & 0x03;
-    dsk_set_active_drive(drive);
-    dsk_set_active_side(side);
-*/
 }

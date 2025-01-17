@@ -82,6 +82,7 @@ void dir_api_opendir(void){
             if(lfs_result < 0){
                 return api_return_errno(API_ELFSFS(lfs_result));
             }
+            lfs_dir_seek(&lfs_volume,dp,2);     //Skip . and .. virtual directory entries
         }
         dir_lfs_open[fd] = true;
         return api_return_ax(fd + FD_OFFS_LFS);
