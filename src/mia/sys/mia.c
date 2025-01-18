@@ -700,7 +700,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         //[1] 0:basic rom disabled
                         mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
                         //dsk_set_ctrl(data); //Handling of DSK related bits
-                        if((prev_ctrl ^ data) & 0x7d)                  //Only send changed dsk bits
+                        if((prev_ctrl ^ data) & 0x01)                  //Only send changed dsk bits and only interrupt enable flag
                             sio_hw->fifo_wr = 0x00000000 | (data << 8);   //Transfer with CMD in dsk_act
                         prev_ctrl = data;    
                         break;
