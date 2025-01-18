@@ -666,6 +666,7 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
             
             uint8_t data;
             volatile uint8_t sink;
+            uint32_t fifo_data;
                 switch(rw_data_addr & 0x010000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
@@ -675,10 +676,11 @@ static __attribute__((optimize("O1"))) __not_in_flash() void act_loop(void)
                     //Microdisc Device Write Registers
                     case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
                         dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
-                        dsk_reg_status |= 0x01;     //Busy
+                        dsk_reg_status = 0x01;     //Busy
+                        fifo_data = 0x80000000 | (IOREGS(DSK_IO_TRACK) << 24) | (IOREGS(DSK_IO_SECT) << 16) | (prev_ctrl << 8);
                         data = wait_act_data();
                         //dsk_act(data);              //Process command
-                        sio_hw->fifo_wr = 0x80000000 | (prev_ctrl << 8) | data;
+                        sio_hw->fifo_wr = fifo_data | data;
                         break;
                     case CASE_WRITE(DSK_IO_DATA):
                         if(dsk_state == DSK_WRITE){
