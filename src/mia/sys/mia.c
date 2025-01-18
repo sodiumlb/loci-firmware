@@ -618,7 +618,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
 }
 
 static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
-    __compiler_memory_barrier();
+    __dmb();
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -685,9 +685,10 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     case CASE_WRITE(DSK_IO_DATA):
                         if(dsk_state == DSK_WRITE){
                             dsk_reg_status &= 0b11111101;
-                            IOREGS(DSK_IO_DRQ) = 0x80;          //After data write to synch with dsk_task()
                             data = wait_act_data();
                             dsk_buf[*dsk_active_pos] = data;
+                            __dmb();
+                            IOREGS(DSK_IO_DRQ) = 0x80;          //After data write to synch with dsk_task()
                         }else{
                             data = wait_act_data();
                             IOREGS(DSK_IO_DATA) = data;
@@ -829,7 +830,9 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
-                        dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
+                        //dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
+                        __dsb();
+                        dsk_reg_status = (dsk_reg_status & 0b11111101);
                         IOREGS(DSK_IO_DRQ) = 0x80;
                         //dsk_rw(false,0x00);
                         break;

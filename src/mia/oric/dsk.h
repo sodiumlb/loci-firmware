@@ -33,7 +33,6 @@ void dsk_run(void);
 void dsk_stop(void);
 void dsk_pause(bool on);
 
-extern volatile uint8_t dsk_next_busy;
 #define dsk_reg_status IOREGS(DSK_IO_CMD)
 #define dsk_reg_irq    IOREGS(DSK_IO_CTRL)
 
