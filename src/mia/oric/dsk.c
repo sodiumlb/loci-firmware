@@ -421,6 +421,7 @@ void dsk_task(void){
     static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
     static uint8_t irq_retry_countdown = 0;
+    static bool fire_irq = false;
 
     switch(dsk_state){
         case DSK_IDLE:
@@ -611,7 +612,8 @@ void dsk_task(void){
             break;
         case DSK_TOGGLE_IRQ:
             //printf("-toggle-");
-            dsk_reg_irq = 0x00;     //Assert register IRQ
+            //dsk_reg_irq = 0x00;     //Assert register IRQ
+            fire_irq = true;
             //IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
             __attribute__((fallthrough));
         case DSK_CLEANUP:
@@ -625,21 +627,16 @@ void dsk_task(void){
     dsk_index_countdown--;
 
     if(dsk_active.index_irq && dsk_index_countdown == 0 && dsk_active.drive->type != EMPTY){
-        dsk_reg_irq = 0x00; // Assert IRQ low
+        fire_irq = true;
     }
 
-    if(dsk_state == DSK_TOGGLE_IRQ){    //Fast-track interrupt triggering
-            dsk_reg_irq = 0x00;     //Assert register IRQ
-            led_set(false);
-            dsk_set_status(DSK_STAT_BUSY, false);
-            dsk_state = DSK_IDLE;
-    }
-
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
-
-    if((dsk_reg_ctrl & DSK_CTRL_IRQ_EN) && (dsk_reg_irq == 0x00) && !dsk_paused){     //Slow IO signal, just toggle it - fingers crossed
-        ext_pulse(EXT_IRQ);
-        //printf("[irq %d]",dsk_state);
+    //IRQ actual firing
+    if(((dsk_reg_irq == 0x00) || fire_irq) && !dsk_paused){
+        if(dsk_reg_ctrl & DSK_CTRL_IRQ_EN)  //Only assert the real IRQ line if IRQ is enabled
+            ext_put(EXT_IRQ,true);          //Slow IO. Physical line asserted ca when this call returns
+        dsk_reg_irq = 0x00;                 //Set IRQ register closest possible to line assert
+        ext_put(EXT_IRQ,false);             //Slow IO. 
+        fire_irq = false;
     }
 }
 
