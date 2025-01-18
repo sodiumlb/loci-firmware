@@ -12,6 +12,7 @@
 #include "hardware/pio_instructions.h"
 #include "mia.pio.h"
 #include "mon/rom.h"
+#include "sys/aut.h"
 #include "sys/cfg.h"
 #include "sys/com.h"
 #include "sys/lfs.h"
@@ -39,7 +40,7 @@
 #define I2C_INIT_ODATA (EXT_nRESET|EXT_LED)
 #endif
 #ifdef HW_REV_1_2
-//PI4IOE5V6408ZTAEX 
+//PI4IOE5V6408ZTAEX
 #define I2C_IOEXP_ADDR 0x43
 #define I2C_IOEXP_REG_IN 0x0F
 #define I2C_IOEXP_REG_OUT 0x05
@@ -59,7 +60,7 @@ static uint8_t ext_port_dir = I2C_IOEXP_DIR;
 
 #define EXT_BTN_LONGPRESS_MS 2000
 #define EXT_IRQ_CAPTURE_TIMEOUT_MS 2000
-static absolute_time_t ext_btn_holdtimer; 
+static absolute_time_t ext_btn_holdtimer;
 static absolute_time_t ext_irq_capture_timeout;
 static bool ext_btn_hold_oneshot;
 
@@ -124,14 +125,14 @@ void ext_init(void)
     gpio_pull_up(SCL_PIN);
     gpio_set_drive_strength(SDA_PIN, GPIO_DRIVE_STRENGTH_2MA);
     gpio_set_drive_strength(SCL_PIN, GPIO_DRIVE_STRENGTH_2MA);
-    
+
     uint8_t rxdata;
     do{
         {
             uint8_t txdata[] = { I2C_IOEXP_REG_DIR, ext_port_dir };
             i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 2, false);
         }
-        {    
+        {
             uint8_t txdata[] = { I2C_IOEXP_REG_DIR };
             i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
             i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &rxdata, 1, false);
@@ -199,8 +200,8 @@ void ext_init_bootstrap(){
     for(i=0; i<rom_desc_cnt; i++){
         if(!strcmp(rom_desc[i].name,"locirom"))
           continue;
-        if(!strcmp(rom_desc[i].name,"microdis.rom"))
-          continue;
+        // if(!strcmp(rom_desc[i].name,"microdis.rom"))
+        //   continue;
 
         if(lfs_stat(&lfs_volume, rom_desc[i].name, &info) == LFS_ERR_NOENT){
             lfs_file_opencfg(&lfs_volume, &fp, rom_desc[i].name, LFS_O_CREAT | LFS_O_RDWR, lfs_alloc_file_config());
@@ -214,12 +215,12 @@ void ext_init_bootstrap(){
 
 #define TEST_PRG_ADDR (0xFFE8)
 const uint8_t __in_flash() test_prg[] = {
-    //FFE8: 
+    //FFE8:
     0xA9, 0x1A, 0x8D, 0x11, 0x03, 0x8D, 0x80, 0xBB,
-    //FFF0: 
+    //FFF0:
     //0x59, 0xF8, 0xA9, 0x01, 0x50, 0xF4, 0x00, 0x00,
     0xD0, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    //FFF8: 
+    //FFF8:
     0x00, 0x00, 0xF2, 0xFF, 0xE8, 0xFF, 0xE8, 0xFF
 };
 
@@ -298,12 +299,18 @@ void ext_task(void)
 #ifdef EMBEDDED_TEST108K_ROM
         case EXT_BOOT_DIAG:
             if(!main_active()){
-                printf("Booting diag ROM\n");
-                ext_embedded_rom(&test108k_rom[0], test108k_rom_size, 0xC000);
+                // @iss: try autorun.dsk/autorun.tap
+                if(auto_run()){
+                    printf("Booting AUTORUN\n");
+                    mia_api_boot();
+                }else{
+                    printf("Booting diag ROM\n");
+                    ext_embedded_rom(&test108k_rom[0], test108k_rom_size, 0xC000);
+                }
                 main_run();
                 ext_state = EXT_IDLE;
             }
-            break;                
+            break;
 #endif
         case EXT_CAPTURE_IRQ:
             if(mia_get_snoop_flag()){
@@ -319,6 +326,10 @@ void ext_task(void)
                 ext_state = EXT_BOOT_LOCI;
             }
             break;
+
+        // @iss: silence compiler
+        default:
+          break;
     }
 
     if(ext_refresh_cnt--)
@@ -347,7 +358,7 @@ void ext_task(void)
                 ext_btn_hold_oneshot = false;
                 ext_put(EXT_RESET,true);
                 ext_state = EXT_BOOT_DIAG;
-            }     
+            }
 #endif
         }
     //Warm button interrupt
@@ -357,13 +368,13 @@ void ext_task(void)
             if(ext_btn_released(EXT_BTN_A)){
                 printf("IRQ trap on\n");
 
-   
+
                 //TODO store MAP PIO SM enables for returning later
                 /*
                     Create an IRQ trap. Jump to NMI vector when released. ROM save state routine waits there.
                     03BA  B8        CLV
-                    03BB  50 FE     BVC -2    
-                    03BD  6C FA FF  JMP ($FFFA) 
+                    03BB  50 FE     BVC -2
+                    03BD  6C FA FF  JMP ($FFFA)
                 */
                 IOREGS(0x03BA) = 0xB8;
                 IOREGS(0x03BB) = 0x50;
@@ -397,8 +408,8 @@ void ext_task(void)
                 ext_btn_hold_oneshot = false;
                 main_break();
                 ext_state = EXT_BOOT_DIAG;
-            }     
-#endif   
+            }
+#endif
         }
     }
 }
@@ -452,16 +463,16 @@ void ext_update(void){
         i2c_write_blocking(EXT_I2C,I2C_IOEXP_ADDR, txdata, 1, true);
         i2c_read_blocking(EXT_I2C,I2C_IOEXP_ADDR, &ext_port_idata, 1, false);
 #ifndef I2C_IOEXP_REG_INV
-        ext_port_idata ^= I2C_IOEXP_INV;    
+        ext_port_idata ^= I2C_IOEXP_INV;
 #endif
 }
 
 bool ext_get_cached(uint8_t pin){
         return((ext_port_idata & pin) != 0x00);
 }
- 
+
 bool ext_get(uint8_t pin)
-{   
+{
     //Read inputs from device
 #ifdef I2C_IOEXP_OUTPUT_IS_ONE
     if(!(ext_port_dir & pin)){

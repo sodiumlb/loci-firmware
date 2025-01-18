@@ -40,7 +40,11 @@ function(create_resources dir output)
         # Create define
         string(CONCAT definetoken "EMBEDDED_" ${filetoken})
         # Append data to output file
-        file(APPEND ${output} "#define ${definetoken}\nconst unsigned char __in_flash() ${filename}[] = {${filedata}};\nconst unsigned ${filename}_size = sizeof(${filename});\n")
+        file(APPEND ${output} "#ifndef ${definetoken}\n")
+        file(APPEND ${output} "#define ${definetoken}\n")
+        file(APPEND ${output} "#endif\n")
+        file(APPEND ${output} "const unsigned char __in_flash() ${filename}[] = {${filedata}};\n")
+        file(APPEND ${output} "const unsigned __in_flash() ${filename}_size = sizeof(${filename});\n")
         # Add it to names array
         string(CONCAT namesarray ${namesarray} "\t{ \"${filenameint}\", ${filename}, sizeof(${filename}) },\n")
     endforeach()
@@ -125,6 +129,7 @@ target_sources(loci-firmware PRIVATE
     mia/mon/set.c
     mia/mon/vip.c
     mia/sys/adj.c
+    mia/sys/aut.c
     mia/sys/cfg.c
     mia/sys/com.c
     mia/sys/cpu.c
