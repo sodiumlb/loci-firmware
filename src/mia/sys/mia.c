@@ -144,7 +144,9 @@ void mia_run(void)
         return;
 
     //Special LOCI access to Oric RAM actions
-    
+    mia_set_rom_ram_enable(false,false);    //Turn on overlay RAM during read/write actions
+    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
+
     action_result = -1;
     saved_reset_vec = XRAMW(0xFFFC);
     saved_brk_vec   = XRAMW(0xFFFE);
@@ -215,6 +217,7 @@ void mia_stop(void)
     ext_put(EXT_nOE,true);
     mia_set_rom_read_enable(false);
     mia_set_rom_ram_enable(false,false);
+    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
     action_state = action_state_idle;
@@ -615,7 +618,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
 }
 
 static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
-    __compiler_memory_barrier();
+    __dmb();
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;
 }
@@ -663,6 +666,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             
             uint8_t data;
             volatile uint8_t sink;
+            uint32_t fifo_data;
                 switch(rw_data_addr & 0x010000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
@@ -672,17 +676,19 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     //Microdisc Device Write Registers
                     case CASE_WRITE(DSK_IO_CMD):    //CMD and STAT are overlayed R/W
                         dsk_reg_irq = 0x80;         //Clear IRQ on write (active low)
-                        dsk_reg_status |= 0x01;     //Busy
+                        dsk_reg_status = 0x01;     //Busy
+                        fifo_data = 0x80000000 | (IOREGS(DSK_IO_TRACK) << 24) | (IOREGS(DSK_IO_SECT) << 16) | (prev_ctrl << 8);
                         data = wait_act_data();
                         //dsk_act(data);              //Process command
-                        sio_hw->fifo_wr = 0x80000000 | (prev_ctrl << 8) | data;
+                        sio_hw->fifo_wr = fifo_data | data;
                         break;
                     case CASE_WRITE(DSK_IO_DATA):
                         if(dsk_state == DSK_WRITE){
                             dsk_reg_status &= 0b11111101;
-                            IOREGS(DSK_IO_DRQ) = 0x80;          //After data write to synch with dsk_task()
                             data = wait_act_data();
                             dsk_buf[*dsk_active_pos] = data;
+                            __dmb();
+                            IOREGS(DSK_IO_DRQ) = 0x80;          //After data write to synch with dsk_task()
                         }else{
                             data = wait_act_data();
                             IOREGS(DSK_IO_DATA) = data;
@@ -695,7 +701,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         //[1] 0:basic rom disabled
                         mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
                         //dsk_set_ctrl(data); //Handling of DSK related bits
-                        if((prev_ctrl ^ data) & 0x7d)                  //Only send changed dsk bits
+                        if((prev_ctrl ^ data) & 0x01)                  //Only send changed dsk bits and only interrupt enable flag
                             sio_hw->fifo_wr = 0x00000000 | (data << 8);   //Transfer with CMD in dsk_act
                         prev_ctrl = data;    
                         break;
@@ -824,7 +830,9 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
-                        dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
+                        //dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
+                        __dsb();
+                        dsk_reg_status = (dsk_reg_status & 0b11111101);
                         IOREGS(DSK_IO_DRQ) = 0x80;
                         //dsk_rw(false,0x00);
                         break;

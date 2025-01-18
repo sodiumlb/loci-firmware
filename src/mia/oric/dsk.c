@@ -106,12 +106,11 @@ volatile uint32_t* dsk_active_pos = &dsk_active.pos;
 
 
 //Status and CMD register are overlapped and can not be directy mapped
-volatile uint8_t        dsk_next_busy;
-uint8_t                 dsk_reg_cmd,
-                        dsk_reg_ctrl, dsk_reg_ctrl_act;
+static uint8_t          dsk_reg_cmd,
+                        dsk_reg_ctrl,
+                        dsk_reg_track,
+                        dsk_reg_sector;
 #define dsk_reg_status IOREGS(DSK_IO_CMD)
-#define dsk_reg_track  IOREGS(DSK_IO_TRACK)
-#define dsk_reg_sector IOREGS(DSK_IO_SECT)
 #define dsk_reg_data   IOREGS(DSK_IO_DATA)
 #define dsk_reg_drq    IOREGS(DSK_IO_DRQ)
 #define dsk_reg_irq    IOREGS(DSK_IO_CTRL)
@@ -345,6 +344,8 @@ void dsk_init(void){
     dsk_reg_drq = 0x80;     //Active low DRQ
 
     dsk_paused = false;
+    IOREGS(DSK_IO_TRACK) = dsk_reg_track;
+    IOREGS(DSK_IO_SECT)  = dsk_reg_sector;
     
 }
 //volatile uint32_t dsk_next_track;
@@ -377,7 +378,7 @@ bool dsk_set_active_sector(uint32_t sector){
             uint32_t sector_len = 0x0080 << dsk_buf[i+7];
             //printf("<%d:%d:%ld>",dsk_buf[i+4],dsk_buf[i+6],sector_len);
             //TODO Side compare
-            if(dsk_buf[i+4] == dsk_reg_track &&
+            if(dsk_buf[i+4] == dsk_active.track &&
                dsk_buf[i+6] == sector)
             {
                 dsk_active.sector = sector;
@@ -420,6 +421,7 @@ void dsk_task(void){
     static uint8_t dsk_index_countdown;
     static uint32_t dsk_rw_countdown;
     static uint8_t irq_retry_countdown = 0;
+    static bool fire_irq = false;
 
     switch(dsk_state){
         case DSK_IDLE:
@@ -430,16 +432,20 @@ void dsk_task(void){
                 dsk_reg_status = dsk_next_status;
             }
         */  
-            while(multicore_fifo_rvalid()){
+            if(multicore_fifo_rvalid()){                        //Keep as if, not while, to allow full handliing of each cmd
                 uint32_t raw_from_act = sio_hw->fifo_rd;
                 bool is_cmd = !!(raw_from_act & 0x80000000);
                 uint8_t cmd_from_act = (uint8_t)(raw_from_act & 0x000000FF);
                 uint8_t ctrl_from_act = (uint8_t)((raw_from_act & 0x0000FF00) >> 8);
+                uint8_t sect_from_act = (uint8_t)((raw_from_act & 0x00FF0000) >> 16);
+                uint8_t track_from_act = (uint8_t)((raw_from_act & 0x7F000000) >> 24);
 
                 dsk_reg_ctrl = ctrl_from_act;
-                if(is_cmd)
+                if(is_cmd){
+                    dsk_reg_track = track_from_act;
+                    dsk_reg_sector = sect_from_act;
                     dsk_next_track = dsk_cmd(cmd_from_act);
-                else
+                }else
                     dsk_next_track = dsk_active.track;
                 //TODO: Read CLK, DDEN
                 uint8_t side = (ctrl_from_act >> 4) & 0x01;
@@ -500,7 +506,7 @@ void dsk_task(void){
                 dsk_set_status(DSK_STAT_DRQ,false);
                 dsk_state = DSK_READ;
                 dsk_rw_countdown = dsk_active.data_len * 200;  //passes before we end the read
-                dsk_next_busy = DSK_STAT_BUSY;
+                //printf("+RPrep %ld %ld %ld\n",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
                 //TODO Multi handling
             }else{
                 if(dsk_active.drive->type != EMPTY){
@@ -513,17 +519,12 @@ void dsk_task(void){
         case DSK_READ:
             if(dsk_reg_drq == 0x80){
                 if(dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
-                    sleep_us(4);
-                    //printf(".");
                     dsk_reg_data = dsk_buf[dsk_active.pos++];
                     led_set(true);
+                    dsk_index_countdown = 255;
+                    __dsb();
                     dsk_reg_drq = 0x00;
                     dsk_set_status(DSK_STAT_DRQ,true);
-                    dsk_index_countdown = 255;
-                    if(dsk_active.pos == (dsk_active.data_start + dsk_active.data_len))
-                        dsk_next_busy = 0x00;
-                    else
-                        dsk_next_busy = DSK_STAT_BUSY; 
                 }else{
                     //printf("+RExit %ld %ld %ld+",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
                     dsk_state = DSK_TOGGLE_IRQ;
@@ -606,7 +607,8 @@ void dsk_task(void){
             break;
         case DSK_TOGGLE_IRQ:
             //printf("-toggle-");
-            dsk_reg_irq = 0x00;     //Assert register IRQ
+            //dsk_reg_irq = 0x00;     //Assert register IRQ
+            fire_irq = true;
             //IOREGS(DSK_IO_CTRL) = dsk_reg_irq;
             __attribute__((fallthrough));
         case DSK_CLEANUP:
@@ -620,21 +622,16 @@ void dsk_task(void){
     dsk_index_countdown--;
 
     if(dsk_active.index_irq && dsk_index_countdown == 0 && dsk_active.drive->type != EMPTY){
-        dsk_reg_irq = 0x00; // Assert IRQ low
+        fire_irq = true;
     }
 
-    if(dsk_state == DSK_TOGGLE_IRQ){    //Fast-track interrupt triggering
-            dsk_reg_irq = 0x00;     //Assert register IRQ
-            led_set(false);
-            dsk_set_status(DSK_STAT_BUSY, false);
-            dsk_state = DSK_IDLE;
-    }
-
-    IOREGS(DSK_IO_CMD) = dsk_reg_status;    //Not directly mapped due to combined use with CMD
-
-    if((dsk_reg_ctrl & DSK_CTRL_IRQ_EN) && (dsk_reg_irq == 0x00) && !dsk_paused){     //Slow IO signal, just toggle it - fingers crossed
-        ext_pulse(EXT_IRQ);
-        //printf("[irq %d]",dsk_state);
+    //IRQ actual firing
+    if(((dsk_reg_irq == 0x00) || fire_irq) && !dsk_paused){
+        if(dsk_reg_ctrl & DSK_CTRL_IRQ_EN)  //Only assert the real IRQ line if IRQ is enabled
+            ext_put(EXT_IRQ,true);          //Slow IO. Physical line asserted ca when this call returns
+        dsk_reg_irq = 0x00;                 //Set IRQ register closest possible to line assert
+        ext_put(EXT_IRQ,false);             //Slow IO. 
+        fire_irq = false;
     }
 }
 
@@ -777,7 +774,7 @@ void dsk_act(uint8_t raw_cmd){
 //};
 uint8_t dsk_cmd(uint8_t raw_cmd){
     DSK_CMD cmd;
-    dsk_reg_status = 0x00;
+    //dsk_reg_status = DSK_STAT_BUSY;
     //IOREGS(DSK_IO_CMD) = DSK_STAT_BUSY; //Assume busy
     cmd = raw_cmd >> 5;
     uint8_t cmd_flags = raw_cmd & 0x1f;
@@ -786,15 +783,16 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
     //Type I commands
     if((raw_cmd & 0x80) == 0x00){
         dsk_next_track = dsk_active.track;
-        dsk_set_status(DSK_STAT_BUSY,true);
         switch(cmd){
             case SEEK: //and RESTORE
                 if(cmd_flags & DSK_FLAG_IS_SEEK){
                     dsk_next_track = dsk_reg_data;
                 }else{ //Restore cmd
                     dsk_next_track = 0;
-                    dsk_reg_track = dsk_next_track;
+                    
                 }
+                dsk_reg_track = dsk_next_track;
+                IOREGS(DSK_IO_TRACK) = dsk_reg_track;
                 break;
             case STEP:
                 if(dsk_active.step_dir_out){
@@ -830,18 +828,17 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
         //Also triggers for SEEK 
         if(cmd_flags & DSK_FLAG_UPD_TRACK){
             dsk_reg_track = dsk_next_track;
+            IOREGS(DSK_IO_TRACK) = dsk_reg_track;
         }
 
     //TYPE II-IV commands
     }else{
         switch(cmd){
             case RSEC:
-                dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
                 dsk_state = DSK_READ_PREP;
                 break;
             case WSEC:
-                dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
                 dsk_state = DSK_WRITE_PREP;
                 break;
@@ -857,15 +854,14 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                     }else{
                         dsk_state = DSK_CLEANUP;
                     }
+                    dsk_set_status(DSK_STAT_BUSY,false);
                 }else{
                 //Read address
-                    dsk_set_status(DSK_STAT_BUSY,true);
                     //dsk_set_status(DSK_STAT_HLOADED,true);
                     dsk_state = DSK_READ_ADDR;
                 }
                 break;
             case TRACK:
-                dsk_set_status(DSK_STAT_BUSY,true);
                 //dsk_set_status(DSK_STAT_HLOADED,true);
                 if(cmd_flags & DSK_FLAG_IS_WRITE){
                     dsk_active.formating = true;
@@ -886,6 +882,7 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                 }
                 break;
             default:
+                dsk_set_status(DSK_STAT_BUSY,false);
                 dsk_state = DSK_IDLE;
                 //fail
                 break;
