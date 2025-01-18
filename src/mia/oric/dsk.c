@@ -506,7 +506,7 @@ void dsk_task(void){
                 dsk_set_status(DSK_STAT_DRQ,false);
                 dsk_state = DSK_READ;
                 dsk_rw_countdown = dsk_active.data_len * 200;  //passes before we end the read
-                dsk_next_busy = DSK_STAT_BUSY;
+                //printf("+RPrep %ld %ld %ld\n",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
                 //TODO Multi handling
             }else{
                 if(dsk_active.drive->type != EMPTY){
@@ -519,17 +519,12 @@ void dsk_task(void){
         case DSK_READ:
             if(dsk_reg_drq == 0x80){
                 if(dsk_active.pos < (dsk_active.data_start + dsk_active.data_len)){
-                    sleep_us(4);
-                    //printf(".");
                     dsk_reg_data = dsk_buf[dsk_active.pos++];
                     led_set(true);
+                    dsk_index_countdown = 255;
+                    __dsb();
                     dsk_reg_drq = 0x00;
                     dsk_set_status(DSK_STAT_DRQ,true);
-                    dsk_index_countdown = 255;
-                    if(dsk_active.pos == (dsk_active.data_start + dsk_active.data_len))
-                        dsk_next_busy = 0x00;
-                    else
-                        dsk_next_busy = DSK_STAT_BUSY; 
                 }else{
                     //printf("+RExit %ld %ld %ld+",dsk_byte_cnt, dsk_active.pos, dsk_active.data_start + dsk_active.data_len);
                     dsk_state = DSK_TOGGLE_IRQ;
