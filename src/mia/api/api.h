@@ -8,6 +8,7 @@
 #define _API_H_
 
 #include "sys/mem.h"
+#include "pico/stdlib.h"
 #include <string.h>
 
 /* The 18 base errors come directly from CC65. Use them when you can.
@@ -74,15 +75,15 @@ void api_run(void);
  * These will fail if the stack would not be empty after the pop.
  */
 
-bool api_pop_uint8_end(uint8_t *data);
-bool api_pop_uint16_end(uint16_t *data);
-bool api_pop_uint32_end(uint32_t *data);
-bool api_pop_int8_end(int8_t *data);
-bool api_pop_int16_end(int16_t *data);
-bool api_pop_int32_end(int32_t *data);
+__not_in_flash() bool api_pop_uint8_end(uint8_t *data);
+__not_in_flash() bool api_pop_uint16_end(uint16_t *data);
+__not_in_flash() bool api_pop_uint32_end(uint32_t *data);
+__not_in_flash() bool api_pop_int8_end(int8_t *data);
+__not_in_flash() bool api_pop_int16_end(int16_t *data);
+__not_in_flash() bool api_pop_int32_end(int32_t *data);
 
 // Safely pop n bytes off the xstack. Fails with false if will underflow.
-static inline bool api_pop_n(void *data, size_t n)
+static inline __not_in_flash() bool api_pop_n(void *data, size_t n)
 {
     if (XSTACK_SIZE - xstack_ptr < n)
         return false;
@@ -94,15 +95,15 @@ static inline bool api_pop_n(void *data, size_t n)
 /* Ordinary xstack popping. Use these for all but the final argument.
  */
 
-static inline bool api_pop_uint8(uint8_t *data) { return api_pop_n(data, sizeof(uint8_t)); }
-static inline bool api_pop_uint16(uint16_t *data) { return api_pop_n(data, sizeof(uint16_t)); }
-static inline bool api_pop_uint32(uint32_t *data) { return api_pop_n(data, sizeof(uint32_t)); }
-static inline bool api_pop_int8(int8_t *data) { return api_pop_n(data, sizeof(int8_t)); }
-static inline bool api_pop_int16(int16_t *data) { return api_pop_n(data, sizeof(int16_t)); }
-static inline bool api_pop_int32(int32_t *data) { return api_pop_n(data, sizeof(int32_t)); }
+static inline __not_in_flash() bool api_pop_uint8(uint8_t *data) { return api_pop_n(data, sizeof(uint8_t)); }
+static inline __not_in_flash() bool api_pop_uint16(uint16_t *data) { return api_pop_n(data, sizeof(uint16_t)); }
+static inline __not_in_flash() bool api_pop_uint32(uint32_t *data) { return api_pop_n(data, sizeof(uint32_t)); }
+static inline __not_in_flash() bool api_pop_int8(int8_t *data) { return api_pop_n(data, sizeof(int8_t)); }
+static inline __not_in_flash() bool api_pop_int16(int16_t *data) { return api_pop_n(data, sizeof(int16_t)); }
+static inline __not_in_flash() bool api_pop_int32(int32_t *data) { return api_pop_n(data, sizeof(int32_t)); }
 
 // Safely push n bytes to the xstack. Fails with false if no room.
-static inline bool api_push_n(const void *data, size_t n)
+static inline __not_in_flash() bool api_push_n(const void *data, size_t n)
 {
     if (n > xstack_ptr)
         return false;
@@ -114,29 +115,29 @@ static inline bool api_push_n(const void *data, size_t n)
 /* Ordinary xstack pushing.
  */
 
-static inline bool api_push_uint8(const uint8_t *data) { return api_push_n(data, sizeof(uint8_t)); }
-static inline bool api_push_uint16(const uint16_t *data) { return api_push_n(data, sizeof(uint16_t)); }
-static inline bool api_push_uint32(const uint32_t *data) { return api_push_n(data, sizeof(uint32_t)); }
-static inline bool api_push_int8(const int8_t *data) { return api_push_n(data, sizeof(int8_t)); }
-static inline bool api_push_int16(const int16_t *data) { return api_push_n(data, sizeof(int16_t)); }
-static inline bool api_push_int32(const int32_t *data) { return api_push_n(data, sizeof(int32_t)); }
+static inline __not_in_flash() bool api_push_uint8(const uint8_t *data) { return api_push_n(data, sizeof(uint8_t)); }
+static inline __not_in_flash() bool api_push_uint16(const uint16_t *data) { return api_push_n(data, sizeof(uint16_t)); }
+static inline __not_in_flash() bool api_push_uint32(const uint32_t *data) { return api_push_n(data, sizeof(uint32_t)); }
+static inline __not_in_flash() bool api_push_int8(const int8_t *data) { return api_push_n(data, sizeof(int8_t)); }
+static inline __not_in_flash() bool api_push_int16(const int16_t *data) { return api_push_n(data, sizeof(int16_t)); }
+static inline __not_in_flash() bool api_push_int32(const int32_t *data) { return api_push_n(data, sizeof(int32_t)); }
 
 // Returning data on XSTACK requires the
 // read/write register to have the latest data.
-static inline void api_sync_xstack(void)
+static inline __not_in_flash() __not_in_flash() void api_sync_xstack(void)
 {
     API_STACK = xstack[xstack_ptr];
 }
 
 // Same as opcode 0 from the 6502 side.
-static inline void api_zxstack(void)
+static inline __not_in_flash() void api_zxstack(void)
 {
     API_STACK = 0;
     xstack_ptr = XSTACK_SIZE;
 }
 
 // Useful for variadic functions or other stack shenanigans.
-static inline bool api_is_xstack_empty(void)
+static inline __not_in_flash() bool api_is_xstack_empty(void)
 {
     return xstack_ptr == XSTACK_SIZE;
 }
@@ -149,8 +150,8 @@ static inline bool api_is_xstack_empty(void)
 // 03B7 60      RTS
 // 03B8 FF FF   .SREG $FF $FF
 
-static inline void api_return_blocked() { *(uint32_t *)&regs[0x10] = 0xA9FE50B8; }
-static inline void api_return_released() { *(uint32_t *)&regs[0x10] = 0xA90050B8; }
+static inline __not_in_flash() void api_return_blocked() { *(uint32_t *)&regs[0x10] = 0xA9FE50B8; }
+static inline __not_in_flash() void api_return_released() { *(uint32_t *)&regs[0x10] = 0xA90050B8; }
 
 // Fast boot by jumping to reset vector
 // 03B0   B8                   CLV
@@ -158,7 +159,7 @@ static inline void api_return_released() { *(uint32_t *)&regs[0x10] = 0xA90050B8
 // 03B3   6C FC FF             JMP ($FFFC)
 // 03B6   00                   BRK
 // 03B7   60                   RTS
-static inline void api_return_boot() { 
+static inline __not_in_flash() void api_return_boot() { 
     *(uint32_t *)&regs[0x14] = 0x6000FFFC; 
     *(uint32_t *)&regs[0x10] = 0x6C0050B8; 
 }
@@ -175,18 +176,18 @@ static inline void api_return_boot() {
 // 03B3   6C FE FF             JMP ($FFFE)
 // 03B6   00                   BRK
 // 03B7   60                   RTS
-static inline void api_return_resume() { 
+static inline __not_in_flash() void api_return_resume() { 
     *(uint32_t *)&regs[0x14] = 0x6000FFFE; 
     *(uint32_t *)&regs[0x10] = 0x6C0050B8; 
 }
 
-static inline void api_set_ax(uint16_t val)
+static inline __not_in_flash() void api_set_ax(uint16_t val)
 {
     *(uint32_t *)&regs[0x14] = 0x6000A200 | (val & 0xFF) | ((val << 8) & 0xFF0000);
 }
 
 
-static inline void api_set_axsreg(uint32_t val)
+static inline __not_in_flash() void api_set_axsreg(uint32_t val)
 {
     api_set_ax(val);
     API_SREG = val >> 16;
@@ -195,17 +196,17 @@ static inline void api_set_axsreg(uint32_t val)
 // Call one of these at the very end. These signal
 // the 6502 that the operation is complete.
 
-static inline void api_return_ax(uint16_t val)
+static inline __not_in_flash() void api_return_ax(uint16_t val)
 {
     api_set_ax(val);
     api_return_released();
 }
-static inline void api_return_axsreg(uint32_t val)
+static inline __not_in_flash() void api_return_axsreg(uint32_t val)
 {
     api_set_axsreg(val);
     api_return_released();
 }
-static inline void api_return_errno(uint16_t errno)
+static inline __not_in_flash() void api_return_errno(uint16_t errno)
 {
     api_zxstack();
     API_ERRNO = errno;

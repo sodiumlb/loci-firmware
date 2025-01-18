@@ -592,7 +592,7 @@ void mia_write_buf(uint16_t addr)
 
 
 //Called by action loop, needs to be fast so using bare PIO accesses
-inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
+inline __attribute__((always_inline)) __not_in_flash() void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
     //mia_set_rom_read_enable(device_rom || basic_rom); 
     //MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
     //MIA_ROM_READ_PIO->sm[MIA_ROM_READ_SM].instr = (device_rom || basic_rom) ? PIO_OP_ON_3 : PIO_OP_OFF;
@@ -617,7 +617,7 @@ void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
     mia_set_rom_ram_enable_inline(device_rom, basic_rom);
 }
 
-static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
+static inline __attribute__((always_inline)) __not_in_flash() uint8_t wait_act_data(void){
     __dmb();
     while((MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM)))){}
     return (MIA_ACT_PIO->rxf[MIA_ACT_SM])>>16 & 0xFF;

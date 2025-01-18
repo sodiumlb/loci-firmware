@@ -40,7 +40,7 @@ void api_run(void)
     api_return_errno(0);
 }
 
-bool api_pop_uint8_end(uint8_t *data)
+__not_in_flash() bool api_pop_uint8_end(uint8_t *data)
 {
     switch (xstack_ptr)
     {
@@ -56,7 +56,7 @@ bool api_pop_uint8_end(uint8_t *data)
     }
 }
 
-bool api_pop_uint16_end(uint16_t *data)
+__not_in_flash() bool api_pop_uint16_end(uint16_t *data)
 {
     switch (xstack_ptr)
     {
@@ -78,7 +78,7 @@ bool api_pop_uint16_end(uint16_t *data)
     }
 }
 
-bool api_pop_uint32_end(uint32_t *data)
+__not_in_flash() bool api_pop_uint32_end(uint32_t *data)
 {
     switch (xstack_ptr)
     {
@@ -110,7 +110,7 @@ bool api_pop_uint32_end(uint32_t *data)
     }
 }
 
-bool api_pop_int8_end(int8_t *data)
+__not_in_flash() bool api_pop_int8_end(int8_t *data)
 {
     switch (xstack_ptr)
     {
@@ -126,7 +126,7 @@ bool api_pop_int8_end(int8_t *data)
     }
 }
 
-bool api_pop_int16_end(int16_t *data)
+__not_in_flash() bool api_pop_int16_end(int16_t *data)
 {
     switch (xstack_ptr)
     {
@@ -148,7 +148,7 @@ bool api_pop_int16_end(int16_t *data)
     }
 }
 
-bool api_pop_int32_end(int32_t *data)
+__not_in_flash() bool api_pop_int32_end(int32_t *data)
 {
     switch (xstack_ptr)
     {
