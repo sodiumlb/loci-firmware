@@ -144,7 +144,9 @@ void mia_run(void)
         return;
 
     //Special LOCI access to Oric RAM actions
-    
+    mia_set_rom_ram_enable(false,false);    //Turn on overlay RAM during read/write actions
+    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
+
     action_result = -1;
     saved_reset_vec = XRAMW(0xFFFC);
     saved_brk_vec   = XRAMW(0xFFFE);
@@ -215,6 +217,7 @@ void mia_stop(void)
     ext_put(EXT_nOE,true);
     mia_set_rom_read_enable(false);
     mia_set_rom_ram_enable(false,false);
+    MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));
     //mia_set_rom_read_enable(false);
     mia_boot_settings = 0x00;
     action_state = action_state_idle;
