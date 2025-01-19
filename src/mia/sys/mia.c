@@ -30,7 +30,8 @@
 #define MIA_WATCHDOG_MS 250
 
 //volatile uint8_t mia_iopage_enable_map[64] __attribute__((aligned(64)));
-static uint32_t mia_iopage_enable_map[2];
+static uint32_t mia_iopage_read_enable_map[2];
+static uint32_t mia_iopage_write_enable_map[2];  
 
 static enum state {
     action_state_idle = 0,
@@ -643,6 +644,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
         if (!(MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM))))
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
+            bool read_enable;
+            bool write_enable;
 
             /*
             //Track errors and stop processing if address is wrong (0x03xx)
@@ -653,9 +656,14 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             */
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
                 (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
-                if((mia_iopage_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F))){
+                read_enable = !!((mia_iopage_read_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
+                if(read_enable){
                     MIA_IO_READ_PIO->irq = 1u << 5;
                 }
+            }else{
+                //For now the write_enable flag is only applied to conditionally used addresses (ACIA)
+                //TODO Evaluate packing it into the case word for general use
+                write_enable = !!((mia_iopage_write_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
             }
             /*
                 Writes are served by a second FIFO word from the PIO program when data is valid.
@@ -705,22 +713,30 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                             sio_hw->fifo_wr = 0x00000000 | (data << 8);   //Transfer with CMD in dsk_act
                         prev_ctrl = data;    
                         break;
-                    //ACIA Device Write Registers 0x380-0x383
-                    case CASE_WRITE(ACIA_IO_DATA):
+                    //ACIA Device Write Registers 0x340-0x343 & 0x380-0x383
+                    case CASE_WRITE(0x340):
+                    case CASE_WRITE(0x380):
                         data = wait_act_data();
-                        acia_write(data);
+                        if(write_enable)
+                            acia_write(data);
                         break;
-                    case CASE_WRITE(ACIA_IO_STAT):
+                    case CASE_WRITE(0x341):
+                    case CASE_WRITE(0x381):
                         data = wait_act_data();
-                        acia_reset(false);
+                        if(write_enable)
+                            acia_reset(false);
                         break;
-                    case CASE_WRITE(ACIA_IO_CMD):
+                    case CASE_WRITE(0x342):
+                    case CASE_WRITE(0x382):
                         data = wait_act_data();
-                        acia_cmd(data);
+                        if(write_enable)
+                            acia_cmd(data);
                         break;
-                    case CASE_WRITE(ACIA_IO_CTRL):
+                    case CASE_WRITE(0x343):
+                    case CASE_WRITE(0x383):
                         data = wait_act_data();
-                        acia_ctrl(data);
+                        if(write_enable)
+                            acia_ctrl(data);
                         break;
                     //RP6502-like API interface write registers
                     case CASE_WRITE(0x03AF): // OS function call
@@ -827,7 +843,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
         
                     //Microdisc Device Read Register
                     case CASE_READ(DSK_IO_CMD):
-                        dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
+                            dsk_reg_irq = 0x80;         //Clear IRQ on read (active low)
+                            //act_log[act_log_idx++] = dsk_reg_status;
                         break;                    
                     case CASE_READ(DSK_IO_DATA):
                         //dsk_reg_status = (dsk_reg_status & 0b11111100) | dsk_next_busy;
@@ -836,11 +853,13 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         IOREGS(DSK_IO_DRQ) = 0x80;
                         //dsk_rw(false,0x00);
                         break;
-                    //ACIA Device Read Registers 0x380-0x383
-                    case CASE_READ(ACIA_IO_DATA):
+                    //ACIA Device Read Registers 0x340-0x343 & 0x380-0x383
+                    case CASE_READ(0x340):
+                    case CASE_READ(0x380):
                         acia_read();
                         break;
-                    case CASE_READ(ACIA_IO_STAT):
+                    case CASE_READ(0x341):
+                    case CASE_READ(0x381):
                         acia_clr_irq();
                         break;
                     case CASE_READ(0x03AC): // xstack
@@ -1384,19 +1403,21 @@ void mia_init(void)
         mia_iopage_enable_map[i] = 0xff;
     }
     */
-   mia_iopage_enable_map[0] = 0;
-   mia_iopage_enable_map[1] = 0;
+   mia_iopage_read_enable_map[0] = 0;
+   mia_iopage_read_enable_map[1] = 0;
+   mia_iopage_write_enable_map[0] = 0xFFFFFFFF;
+   mia_iopage_write_enable_map[1] = 0xFFFFFFFF;
     //Enable response on IO registers 0x310-0x31B (DSK/TAP)
     for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
-        mia_iopage_enable_map[0] |= (0x1UL << (i & 0x1F));
+        mia_iopage_read_enable_map[0] |= (0x1UL << (i & 0x1F));
     }
     //Enable response on IO registers 0x380-0x383 (ACIA)
     for(int i=(0x80 >> 2); i<=(0x83 >> 2); i++){
-        mia_iopage_enable_map[1] |= (0x1UL << (i & 0x1F));
+        mia_iopage_read_enable_map[1] |= (0x1UL << (i & 0x1F));
     }
     //Enable response on IO registers 0x3A0-0x3BF (LOCI)
     for(int i=(0xA0 >> 2); i<=(0xBF >> 2); i++){
-        mia_iopage_enable_map[1] |= (0x1UL << (i & 0x1F));
+        mia_iopage_read_enable_map[1] |= (0x1UL << (i & 0x1F));
     }
    
    //LOCI identity marker

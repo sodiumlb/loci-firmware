@@ -15,6 +15,7 @@
 #define ACIA_IO_STAT 0x0381
 #define ACIA_IO_CMD  0x0382
 #define ACIA_IO_CTRL 0x0383
+*/
 
 /* Kernel events
  */
