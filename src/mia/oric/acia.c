@@ -132,42 +132,46 @@ void acia_task(void){
         ext_pulse(EXT_IRQ);
         return;
     }
-
-    if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
-        if(tuh_cdc_write_available(acia_dev)){
-            if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
-                tuh_cdc_write_flush(acia_dev);
-                //printf("[%02x]",acia_tx_data);
-                acia_set_status(ACIA_STAT_TX_EMPTY,true);
-                if(acia_tx_echo_enable){
-                    IOREGS(ACIA_IO_DATA) = acia_tx_data;
-                    acia_set_status(ACIA_STAT_RX_FULL, true);
-                }
-                if(acia_tx_irq_enable){
+    if(acia_line_state_dtr != 0){
+        if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
+            if(tuh_cdc_write_available(acia_dev)){
+                if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
+                    tuh_cdc_write_flush(acia_dev);
+                    //printf("[%02x]",acia_tx_data);
+                    acia_set_status(ACIA_STAT_TX_EMPTY,true);
+                    if(acia_tx_echo_enable){
+                        acia_io->data = acia_tx_data;
+                        __dmb();
+                        acia_set_status(ACIA_STAT_RX_FULL, true);
+                    }
+                    if(acia_tx_irq_enable){
+                        acia_set_status(ACIA_STAT_IRQ, true);
+                        ext_pulse(EXT_IRQ);
+                    }
+                }else{printf("!");}
+            }
+        }
+        uint32_t acia_rx_available = tuh_cdc_read_available(acia_dev);
+        if((acia_rx_available > 0) && !acia_get_status(ACIA_STAT_RX_FULL)){
+            /*
+            if((acia_rx_buffer_len == 0) || (acia_rx_buffer_pos >= acia_rx_buffer_len)){
+                acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, (acia_rx_available > ACIA_RX_BUFFER_SIZE ? ACIA_RX_BUFFER_SIZE : acia_rx_available));
+                acia_rx_buffer_pos = 0;
+            }
+            if((acia_rx_buffer_len > 0) && (acia_rx_buffer_pos < acia_rx_buffer_len) && acia_stat_checked){
+                acia_rx_data = acia_rx_buffer[acia_rx_buffer_pos++];
+            */
+            if(tuh_cdc_read(acia_dev, &acia_io->data, 1)){
+                __dmb();
+                acia_set_status(ACIA_STAT_RX_FULL, true);
+                if(acia_rx_irq_enable){
                     acia_set_status(ACIA_STAT_IRQ, true);
                     ext_pulse(EXT_IRQ);
                 }
-            }else{printf("!");}
-        }
-    }
-    uint32_t acia_rx_available = tuh_cdc_read_available(acia_dev);
-    if((acia_rx_available > 0) && !acia_get_status(ACIA_STAT_RX_FULL)){
-        /*
-        if((acia_rx_buffer_len == 0) || (acia_rx_buffer_pos >= acia_rx_buffer_len)){
-            acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, (acia_rx_available > ACIA_RX_BUFFER_SIZE ? ACIA_RX_BUFFER_SIZE : acia_rx_available));
-            acia_rx_buffer_pos = 0;
-        }
-        if((acia_rx_buffer_len > 0) && (acia_rx_buffer_pos < acia_rx_buffer_len) && acia_stat_checked){
-            acia_rx_data = acia_rx_buffer[acia_rx_buffer_pos++];
-        */
-        if(tuh_cdc_read(acia_dev, &acia_rx_data, 1)){
-            IOREGS(ACIA_IO_DATA) = acia_rx_data;
-            acia_set_status(ACIA_STAT_RX_FULL, true);
-            if(acia_rx_irq_enable){
-                acia_set_status(ACIA_STAT_IRQ, true);
-                ext_pulse(EXT_IRQ);
+                acia_stat_checked = false;
             }
-            acia_stat_checked = false;
+        }
+        if(acia_rx_irq_enable && acia_get_status(ACIA_STAT_RX_FULL) && ! acia_get_status(ACIA_STAT_IRQ)){
         }
     }
     if(acia_cmd_todo){
