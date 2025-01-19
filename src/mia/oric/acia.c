@@ -126,9 +126,7 @@ void acia_task(void){
         printf("ACIA lost\n");
         acia_dev = -1;
         acia_rx_buffer_len = 0;
-        acia_set_status(ACIA_STAT_NOT_DSR,true);
-        acia_set_status(ACIA_STAT_NOT_DCD,true);
-        acia_set_status(ACIA_STAT_IRQ, true);
+        acia_set_status((ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD | ACIA_STAT_IRQ) ,true);
         ext_pulse(EXT_IRQ);
         return;
     }
