@@ -48,13 +48,16 @@
 #define ACIA_STAT_IRQ      0b10000000
 
 volatile acia_io_t* acia_io;
+volatile uint8_t acia_stat_base;
+volatile uint8_t acia_stat_rx;
+volatile uint8_t acia_stat_tx;
+volatile uint8_t acia_stat_irq;
+#define ACIA_UPDATE_STAT  acia_io->stat = acia_stat_base | acia_stat_tx | acia_stat_rx | acia_stat_irq
 
 static int acia_dev;
 volatile uint8_t acia_tx_data;
 volatile bool acia_cmd_todo;
 volatile bool acia_ctrl_todo;
-volatile bool acia_stat_checked;
-volatile bool acia_data_read;
 
 static bool acia_tx_irq_enable;
 static bool acia_rx_irq_enable;
@@ -67,55 +70,53 @@ static cdc_line_coding_stopbits_t acia_stop_bits;
 static cdc_control_line_state_t acia_line_state_dtr;
 static cdc_control_line_state_t acia_line_state_rts;
 
-void acia_do_cmd(uint8_t cmd);
+bool acia_do_cmd(uint8_t cmd);
 void acia_do_ctrl(uint8_t ctrl);
 
-#define ACIA_RX_BUFFER_SIZE 64
+#define ACIA_RX_BUFFER_SIZE 32
+#define ACIA_RX_BUFFER_IDX_MASK 0x1F
 static uint8_t acia_rx_buffer[ACIA_RX_BUFFER_SIZE];
-uint32_t acia_rx_buffer_len;
-uint32_t acia_rx_buffer_pos;
+volatile uint8_t acia_rx_buffer_head;
+volatile uint8_t acia_rx_buffer_tail;
 
-void acia_set_status(uint8_t bit_mask, bool set){
+void acia_set_base_status(uint8_t bit_mask, bool set){
     if(set){
-        acia_io->stat |= bit_mask;
+        acia_stat_base |= bit_mask;
     }else{
-        acia_io->stat &= ~bit_mask;
+        acia_stat_base &= ~bit_mask;
     }
 }
-bool acia_get_status(uint8_t bit){
-    return(!!(acia_io->stat & bit));
-}
 
-static inline bool acia_calc_irq(void){
-    return !!(acia_io->stat & (
-            ( acia_tx_irq_enable ? ACIA_STAT_TX_EMPTY : 0) |
-            ( acia_rx_irq_enable ? ACIA_STAT_RX_FULL : 0))
-    );
+bool acia_get_base_status(uint8_t bit){
+    return(!!(acia_stat_base & bit));
 }
 
 /* Kernel events
  */
 
 void acia_init(void){
+    acia_io = (acia_io_t*)(&IOREGS(0x380));
     acia_reset(true);
     acia_dev = -1;
-    acia_rx_buffer_len = 0;
-    acia_rx_buffer_pos = 0;
-    acia_data_read = false;
-    acia_io = (acia_io_t*)(&IOREGS(0x380));
+    acia_rx_buffer_head = 0;
+    acia_rx_buffer_tail = 0;
 }
+
 void acia_task(void){
+    static uint8_t cnt = 0;
+    bool fire_irq = false;
     if(acia_dev < 0){
         for(uint8_t i=0; i < CFG_TUH_CDC; i++){
         //Only hooking up to CDC devices with AT commands aka modems
         //TODO make configurable what CDC device to "mount"
             if(tuh_cdc_mounted(i) && cdc_is_modem(i)){
                 acia_dev = i;
-                printf("ACIA on %d\n", acia_dev);
-                acia_set_status(ACIA_STAT_NOT_DSR,false);
-                //acia_set_status(ACIA_STAT_NOT_DCD,false);
-                acia_set_status(ACIA_STAT_IRQ, true);
-                //ext_pulse(EXT_IRQ);
+                //printf("ACIA on %d\n", acia_dev);
+                acia_set_base_status(ACIA_STAT_NOT_DSR,false);
+                acia_set_base_status(ACIA_STAT_NOT_DCD,false);
+                if(acia_line_state_dtr != 0){
+                    fire_irq = true;
+                }
                 break;
             }
         }
@@ -125,89 +126,106 @@ void acia_task(void){
     if(!tuh_cdc_mounted(acia_dev)){
         printf("ACIA lost\n");
         acia_dev = -1;
-        acia_rx_buffer_len = 0;
-        acia_set_status((ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD | ACIA_STAT_IRQ) ,true);
-        ext_pulse(EXT_IRQ);
+        acia_rx_buffer_head = 0;
+        acia_rx_buffer_tail = 0;
+        acia_set_base_status((ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD) ,true);
+        if(acia_line_state_dtr != 0){
+            fire_irq = true;
+        }
         return;
     }
     if(acia_line_state_dtr != 0){
-        if(!acia_get_status(ACIA_STAT_TX_EMPTY)){
+        if(!acia_stat_tx){
             if(tuh_cdc_write_available(acia_dev)){
                 if(tuh_cdc_write(acia_dev, (void*)&acia_tx_data, 1)){
                     tuh_cdc_write_flush(acia_dev);
-                    //printf("[%02x]",acia_tx_data);
-                    acia_set_status(ACIA_STAT_TX_EMPTY,true);
+                    __dmb();
+                    acia_stat_tx = ACIA_STAT_TX_EMPTY;
                     if(acia_tx_echo_enable){
                         acia_io->data = acia_tx_data;
                         __dmb();
-                        acia_set_status(ACIA_STAT_RX_FULL, true);
+                        acia_stat_rx = ACIA_STAT_RX_FULL;
+                        if(acia_rx_irq_enable){
+                            fire_irq = true;
+                        }
+                    }else if(acia_tx_irq_enable){
+                        fire_irq = true;
                     }
-                    if(acia_tx_irq_enable){
-                        acia_set_status(ACIA_STAT_IRQ, true);
-                        ext_pulse(EXT_IRQ);
-                    }
-                }else{printf("!");}
+                }
             }
         }
         uint32_t acia_rx_available = tuh_cdc_read_available(acia_dev);
-        if((acia_rx_available > 0) && !acia_get_status(ACIA_STAT_RX_FULL)){
-            /*
-            if((acia_rx_buffer_len == 0) || (acia_rx_buffer_pos >= acia_rx_buffer_len)){
-                acia_rx_buffer_len = tuh_cdc_read(acia_dev, acia_rx_buffer, (acia_rx_available > ACIA_RX_BUFFER_SIZE ? ACIA_RX_BUFFER_SIZE : acia_rx_available));
-                acia_rx_buffer_pos = 0;
-            }
-            if((acia_rx_buffer_len > 0) && (acia_rx_buffer_pos < acia_rx_buffer_len) && acia_stat_checked){
-                acia_rx_data = acia_rx_buffer[acia_rx_buffer_pos++];
-            */
-            if(tuh_cdc_read(acia_dev, &acia_io->data, 1)){
-                __dmb();
-                acia_set_status(ACIA_STAT_RX_FULL, true);
-                if(acia_rx_irq_enable){
-                    acia_set_status(ACIA_STAT_IRQ, true);
-                    ext_pulse(EXT_IRQ);
-                }
-                acia_stat_checked = false;
-            }
+        if(acia_rx_available > 0){
+            uint8_t len = acia_rx_buffer_tail - acia_rx_buffer_head - 2; //Only overlap when empty (keep 1 extra distance)
+            len &= ACIA_RX_BUFFER_IDX_MASK; //Truncate len
+            if(len > (ACIA_RX_BUFFER_SIZE - acia_rx_buffer_head))       //Truncate wrapping loads
+                len = ACIA_RX_BUFFER_SIZE - acia_rx_buffer_head;
+            acia_rx_buffer_head += tuh_cdc_read(acia_dev, &acia_rx_buffer[acia_rx_buffer_head], len);
+            acia_rx_buffer_head &= ACIA_RX_BUFFER_IDX_MASK; //Wrap index
         }
-        if(acia_rx_irq_enable && acia_get_status(ACIA_STAT_RX_FULL) && ! acia_get_status(ACIA_STAT_IRQ)){
+        if(!acia_stat_rx){
+            if(acia_rx_buffer_head != acia_rx_buffer_tail){
+                acia_io->data = acia_rx_buffer[acia_rx_buffer_tail];
+                acia_rx_buffer_tail = (acia_rx_buffer_tail + 1) & ACIA_RX_BUFFER_IDX_MASK;
+                __dmb();
+                acia_stat_rx = ACIA_STAT_RX_FULL;
+                if(acia_rx_irq_enable){
+                    fire_irq = true;
+                }
+                cnt = 255;
+            }
+        }else{
+            if(0 == --cnt && acia_rx_irq_enable){
+                fire_irq = true;
+            }
         }
     }
     if(acia_cmd_todo){
-        printf("ACIA cmd %02x regs %08x\n", acia_io->cmd, acia_io->regs);
-        acia_do_cmd(acia_io->cmd);
+        //printf("ACIA cmd %02x\n", acia_io->cmd);
+        bool cmd_fire_irq = acia_do_cmd(acia_io->cmd);
+        fire_irq = fire_irq || cmd_fire_irq;
         acia_cmd_todo = false;
     }
     if(acia_ctrl_todo){
-        printf("ACIA ctrl %02x regs %08x\n", acia_io->ctrl, acia_io->regs);
+        //printf("ACIA ctrl %02x\n", acia_io->ctrl);
         acia_do_ctrl(acia_io->ctrl);
         acia_ctrl_todo = false;
+    }
+
+    __dmb();
+    if(fire_irq){
+        acia_stat_irq = ACIA_STAT_IRQ;
+        ext_put(EXT_IRQ,true);
+        acia_io->stat = acia_stat_base | acia_stat_tx | acia_stat_rx | ACIA_STAT_IRQ;   //Race free irq assign
+        __dmb();
+        ext_put(EXT_IRQ,false);
+    }else{
+        ACIA_UPDATE_STAT;
     }
 }
 
 
 void acia_stop(){
-    printf("acia_stop()\n");
+    //printf("acia_stop()\n");
     acia_dev = -1;
-    acia_rx_buffer_len = 0;
+    acia_rx_buffer_head = 0;
+    acia_rx_buffer_tail = 0;
     acia_reset(true);
 }
 
-void acia_do_cmd(uint8_t cmd){
+bool acia_do_cmd(uint8_t cmd){
     bool fire_irq = false;
     if(!!(cmd & ACIA_CMD_DTR)){
         acia_line_state_dtr = CDC_CONTROL_LINE_STATE_DTR;
-        if(acia_get_status(ACIA_STAT_NOT_DCD))
+        if(acia_get_base_status(ACIA_STAT_NOT_DCD))
             fire_irq = true;
-        acia_set_status(ACIA_STAT_NOT_DCD,false);
+        acia_set_base_status(ACIA_STAT_NOT_DCD,false);
     }else{
         acia_line_state_dtr = 0;
-        acia_set_status(ACIA_STAT_NOT_DCD,true);
+        acia_set_base_status(ACIA_STAT_NOT_DCD,true);
     }
     acia_rx_irq_enable = !(cmd & ACIA_CMD_IRQ);
-    if(acia_rx_irq_enable && acia_get_status(ACIA_STAT_RX_FULL && !acia_get_status(ACIA_STAT_IRQ))){
-        fire_irq = true;
-    }
-
+    
     if(!!(cmd & ACIA_CMD_TXC))
         acia_line_state_rts = CDC_CONTROL_LINE_STATE_RTS;
     else
@@ -216,10 +234,7 @@ void acia_do_cmd(uint8_t cmd){
     acia_tx_irq_enable = (cmd & ACIA_CMD_TXC) == 0x04;
     acia_tx_brk_enable = (cmd & ACIA_CMD_TXC) == 0x0C;
     acia_tx_echo_enable = !!(cmd & ACIA_CMD_ECH);
-    if(acia_tx_irq_enable && acia_get_status(ACIA_STAT_TX_EMPTY && !acia_get_status(ACIA_STAT_IRQ))){
-        fire_irq = true;
-    }
-
+    
     if(!!(cmd & ACIA_CMD_PEN)){
         switch(cmd & ACIA_CMD_PAR){
             case(ACIA_PAR_ODD):
@@ -242,10 +257,7 @@ void acia_do_cmd(uint8_t cmd){
     }
     tuh_cdc_set_control_line_state(acia_dev, acia_line_state_dtr | acia_line_state_rts, NULL, 0);
     tuh_cdc_set_data_format(acia_dev, acia_stop_bits, acia_parity, acia_data_bits, NULL, 0);
-    if(fire_irq){
-        acia_set_status(ACIA_STAT_IRQ,true);
-        ext_pulse(EXT_IRQ);
-    }
+    return fire_irq;
 }
 
 void acia_do_ctrl(uint8_t ctrl){
@@ -328,29 +340,38 @@ void __not_in_flash() acia_reset(bool hw_reset){
         // IOREGS(ACIA_IO_STAT) = ACIA_STAT_TX_EMPTY | ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD;
         // IOREGS(ACIA_IO_CMD)  = ACIA_CMD_IRQ;
         // IOREGS(ACIA_IO_CTRL) = 0;
-        acia_io->regs = (0 << 24) | (ACIA_CMD_IRQ << 16) | ((ACIA_STAT_TX_EMPTY | ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD) << 8) | (0);
+        acia_io->regs = (ACIA_CMD_IRQ << 16);
+        acia_stat_irq = 0x00;
+        acia_stat_rx = 0x00;
+        acia_stat_tx = ACIA_STAT_TX_EMPTY;
+        acia_stat_base = ACIA_STAT_NOT_DSR | ACIA_STAT_NOT_DCD;
     }else{
-        acia_io->stat &= ~ACIA_STAT_OVR_ERR;
+        acia_stat_base &= ~ACIA_STAT_OVR_ERR;
         acia_io->data = 0;
         acia_io->cmd  = (acia_io->cmd & 0xe0) | ACIA_CMD_IRQ;
     }
+    ACIA_UPDATE_STAT;
 }
 
 void __not_in_flash() acia_read(void){
-    acia_io->stat &= ~ACIA_STAT_RX_FULL;
+    //acia_io->stat &= ~ACIA_STAT_RX_FULL;
     __dmb();
-    acia_data_read = true;
+    acia_stat_rx = 0x00;
+    ACIA_UPDATE_STAT;
 }
 
 void __not_in_flash() acia_clr_irq(void){
-    acia_io->stat &= ~ACIA_STAT_IRQ;
-    acia_stat_checked = true;
+    //acia_io->stat &= ~ACIA_STAT_IRQ;
+    __dmb();
+    acia_stat_irq = 0x00;
+    ACIA_UPDATE_STAT;
 }
 
 void __not_in_flash() acia_write(uint8_t data){
     acia_tx_data = data;
     __dmb();
-    acia_io->stat &= ~ACIA_STAT_TX_EMPTY;
+    acia_stat_tx = 0x00;
+    ACIA_UPDATE_STAT;
 }
 
 void __not_in_flash() acia_cmd(uint8_t data){

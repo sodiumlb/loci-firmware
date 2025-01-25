@@ -11,6 +11,19 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef union acia_io_union {
+    struct {
+        uint8_t data;
+        uint8_t stat;
+        uint8_t cmd;
+        uint8_t ctrl;
+    };
+    uint32_t regs;
+} acia_io_t;
+
+extern volatile acia_io_t* acia_io;
+
+/*
 #define ACIA_IO_DATA 0x0380
 #define ACIA_IO_STAT 0x0381
 #define ACIA_IO_CMD  0x0382
