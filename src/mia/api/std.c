@@ -176,7 +176,7 @@ void std_api_read_xstack(void)
         if (!api_pop_uint16_end(&count) ||
             (fd && fd < STD_FIL_OFFS) ||
             fd >= STD_LFS_MAX + STD_LFS_OFFS ||
-            count > 0x100)
+            count > XSTACK_SIZE)
             return api_return_errno(API_EINVAL);
         buf = &xstack[XSTACK_SIZE - count];
         if (!fd)

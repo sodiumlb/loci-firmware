@@ -44,7 +44,8 @@ asm(".equ iopage, 0x20040000");
 #define IOREGSW(addr) ((uint16_t *)&IOREGS(addr))[0]
 
 // The xstack is:
-// 512 bytes, enough to hold two CC65 stack frames.
+// 512 bytes, enough to hold a CC65 stack frame, two strings for a
+// file rename, or a disk sector
 // 1 byte at end+1 always zero for cstring and safety.
 // Using xstack for cstrings doesn't require sending the zero termination.
 #define XSTACK_SIZE 0x200
