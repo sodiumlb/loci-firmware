@@ -125,11 +125,11 @@ target_sources(loci-firmware PRIVATE
     mia/sys/ssd.c
 #    mia/sys/vga.c
     mia/usb/cdc.c
-    mia/usb/hid_ps4.c
     mia/usb/hid.c
     mia/usb/kbd.c
     mia/usb/mou.c
     mia/usb/msc.c
+    mia/usb/pad.c
     mia/usb/usb.c
     mia/oric/acia.c
     mia/oric/map.c

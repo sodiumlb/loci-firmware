@@ -33,6 +33,7 @@
 #include "sys/ext.h"
 #include "usb/kbd.h"
 #include "usb/mou.h"
+#include "usb/pad.h"
 #include "usb/cdc.h"
 #include "usb/msc.h"
 #include "oric/acia.h"
@@ -78,6 +79,7 @@ static void init(void)
     //aud_init();
     kbd_init();
     mou_init();
+    pad_init();
     rom_init();
     led_init();
     clk_init();
@@ -148,6 +150,7 @@ static void stop(void)
     std_stop();
     kbd_stop();
     mou_stop();
+    pad_stop();
     dsk_stop();
     acia_stop();
 }
@@ -187,6 +190,8 @@ bool main_pix(uint8_t ch, uint8_t addr, uint16_t word)
         return kbd_xreg(word);
     case 0x001:
         return mou_xreg(word);
+    case 0x002:
+        return pad_xreg(word);
     default:
         return false;
     }
