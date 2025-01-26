@@ -52,6 +52,7 @@ static char __in_flash() *vips[] = {
         "Sodiumlightbaby",
         "Paul S. Jenkins",
         "Muhammad A",
+        "Ville Kivivuori",
         // YouTube
         "AJ_Whitney",
         // Other
