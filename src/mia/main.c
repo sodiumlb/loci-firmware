@@ -104,6 +104,7 @@ void main_task(void)
     //map_task();
     //aud_task();
     kbd_task();
+    pad_task();
     cdc_task();
     //vga_task();
     std_task();
