@@ -13,7 +13,7 @@
 #include "pico/stdio/driver.h"
 #include <stdio.h>
 
-#define COM_BUF_SIZE 256
+#define COM_BUF_SIZE 128
 #define COM_CSI_PARAM_MAX_LEN 16
 
 typedef enum
