@@ -415,6 +415,7 @@ void com_task(void)
 {
     com_tx_task();
 
+    /* Disable real UART
     // Detect UART breaks.
     static uint32_t break_detect = 0;
     uint32_t current_break = uart_get_hw(COM_UART)->rsr & UART_UARTRSR_BE_BITS;
@@ -423,6 +424,7 @@ void com_task(void)
     else if (break_detect)
         main_break();
     break_detect = current_break;
+    */
 
     // Allow UART RX FIFO to fill during MIA actions.
     // At all other times the FIFO must be emptied to detect breaks.
