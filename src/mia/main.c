@@ -40,6 +40,7 @@
 #include "oric/map.h"
 #include "oric/dsk.h"
 #include "oric/tap.h"
+#include "oric/ula.h"
 
 /**************************************/
 /* All kernel modules register below. */
@@ -112,6 +113,7 @@ void main_task(void)
     pwr_task();
     adj_task();
     acia_task();
+    ula_task();
 }
 
 // Tasks that call FatFs should be here instead of main_task().
@@ -134,6 +136,7 @@ static void task(void)
 // Event to start running the 6502.
 static void run(void)
 {
+    ula_run();
     //vga_run();
     api_run();
     //map_run();
@@ -166,6 +169,7 @@ static void reset(void)
     ram_reset();
     rom_reset();
     //vga_reset();
+    ula_reset();
 }
 
 // Triggered once after init then after every PHI2 clock change.

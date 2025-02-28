@@ -41,16 +41,19 @@ static enum state {
 } volatile action_state = action_state_idle;
 static absolute_time_t action_watchdog_timer;
 static volatile int32_t action_result = -1;
-static int32_t saved_reset_vec = -1;
-static int32_t saved_brk_vec = -1;
+static bool saved_vectors = false;
+static uint16_t saved_reset_vec_bas;
+static uint16_t saved_reset_vec_dev;
+static uint16_t saved_brk_vec_bas;
+static uint16_t saved_brk_vec_dev;
 static uint16_t rw_addr;
 static volatile int32_t rw_pos;
 static volatile int32_t rw_end;
 static volatile bool irq_enabled;
-static volatile bool reset_requested;
+static volatile bool stop_requested;
 static volatile bool snoop_flag;
-volatile bool map_flag_basic, map_flag_device;
-static bool saved_map_flag_basic, saved_map_flag_device;
+volatile uint8_t map_flags;
+static uint8_t saved_map_flags;
 static uint32_t ula_trig_addr;
 
 void mia_clear_snoop_flag(void){
@@ -61,8 +64,7 @@ bool mia_get_snoop_flag(void){
 }
 
 void mia_save_map_flags(void){
-    saved_map_flag_basic = map_flag_basic;
-    saved_map_flag_device = map_flag_device;
+    saved_map_flags = map_flags;
 }
 
 
@@ -131,28 +133,34 @@ void mia_run(void)
     //mia_set_rom_read_enable(true);
     //mia_set_rom_ram_enable(true,false);
     mia_set_rom_read_enable(true);
-    mia_set_rom_ram_enable(!!(mia_boot_settings & MIA_BOOTSET_FDC),!(mia_boot_settings & MIA_BOOTSET_FDC));
     
     //ext_put(EXT_OE,true);
     //ext_put(EXT_nRESET,true);
   
     mia_io_errors = 0;
-    reset_requested = false;
+    stop_requested = false;
 
     //mia_set_watch_address(0xFFE2);
     //Normal emulated boot
-    if (action_state == action_state_idle)
+    if (action_state == action_state_idle){
+        mia_set_rom_ram_enable(!!(mia_boot_settings & MIA_BOOTSET_FDC),!(mia_boot_settings & MIA_BOOTSET_FDC));
         return;
-
+    }
+    
     //Special LOCI access to Oric RAM actions
     mia_set_rom_ram_enable(false,false);    //Turn on overlay RAM during read/write actions
     MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_out(pio_y,14));
 
     action_result = -1;
-    saved_reset_vec = XRAMW(0xFFFC);
-    saved_brk_vec   = XRAMW(0xFFFE);
+    saved_vectors = true;
+    saved_reset_vec_bas = XRAMW(0xFFFC);
+    saved_reset_vec_dev = XRAMW(0xBFFC);
+    saved_brk_vec_bas   = XRAMW(0xFFFE);
+    saved_brk_vec_dev   = XRAMW(0xBFFE);
     XRAMW(0xFFFC) = 0x03B0;
+    XRAMW(0xBFFC) = 0x03B0;
     XRAMW(0xFFFE) = 0x03B0;
+    XRAMW(0xBFFE) = 0x03B0;
     action_watchdog_timer = delayed_by_us(get_absolute_time(),
                                           cpu_get_reset_us() +
                                               MIA_WATCHDOG_MS * 1000);
@@ -173,7 +181,7 @@ void mia_run(void)
         //mia_set_watch_address(0xFFF6);
         IOREGS(0x03B0) = 0x78;
         IOREGS(0x03B1) = 0xA9;
-        IOREGS(0x03B2) = mbuf[0];
+        IOREGS(0x03B2) = mbuf[rw_pos];
         IOREGS(0x03B3) = 0x8D;
         IOREGS(0x03B4) = rw_addr & 0xFF;
         IOREGS(0x03B5) = rw_addr >> 8;
@@ -207,13 +215,19 @@ void mia_run(void)
     default:
         break;
     }
+    if(!ext_get_cached(EXT_RESET)){
+        ext_put(EXT_RESET,true);
+    }
+    ext_put(EXT_RESET,false);
 }
 
 void mia_stop(void)
 {
     irq_enabled = false;
-    ext_put(EXT_IRQ, false);
-    ext_put(EXT_ROMDIS,false);
+    ext_put(EXT_IRQ | EXT_ROMDIS, false);
+    if(mia_active())
+        ext_put(EXT_RESET,true);
+
     //ext_set_dir(EXT_ROMDIS, false);
     ext_put(EXT_nOE,true);
     mia_set_rom_read_enable(false);
@@ -223,15 +237,13 @@ void mia_stop(void)
     mia_boot_settings = 0x00;
     action_state = action_state_idle;
     mia_boot_state = MIA_IDLE;
-    if (saved_reset_vec >= 0)
+    if (saved_vectors)
     {
-        XRAMW(0xFFFC) = saved_reset_vec;
-        saved_reset_vec = -1;
-    }
-    if (saved_brk_vec >= 0)
-    {
-        XRAMW(0xFFFE) = saved_brk_vec;
-        saved_brk_vec = -1;
+        XRAMW(0xFFFC) = saved_reset_vec_bas;
+        XRAMW(0xBFFC) = saved_reset_vec_dev;
+        XRAMW(0xFFFE) = saved_brk_vec_bas;
+        XRAMW(0xBFFE) = saved_brk_vec_dev;
+        saved_vectors = false;
     }
 }
 
@@ -446,7 +458,7 @@ void mia_task(void)
                 }
                 if(!!(mia_boot_settings & MIA_BOOTSET_FAST)){
                     if(!!(mia_boot_settings & MIA_BOOTSET_RESUME)){
-                        mia_set_rom_ram_enable(saved_map_flag_device,saved_map_flag_basic);
+                        mia_set_rom_ram_enable_switch(saved_map_flags);
                         printf("Resuming\n");
                         __dsb();
                         api_return_resume();
@@ -472,9 +484,9 @@ void mia_task(void)
 void mia_main_task(){
     static uint32_t prev_io_errors = 0;
 
-    if(reset_requested){
-        ext_put(EXT_RESET,true);
-        reset_requested = false;
+    if(stop_requested){
+        mia_stop();
+        stop_requested = false;
     }
     // check on watchdog unless we explicitly ended or errored
     if (mia_active() && action_result == -1)
@@ -541,7 +553,7 @@ void mia_read_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_read;
-    main_run();
+    mia_run();
 }
 
 void mia_verify_buf(uint16_t addr)
@@ -565,7 +577,7 @@ void mia_verify_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_verify;
-    main_run();
+    mia_run();
 }
 static uint8_t prev_ctrl;
 void mia_write_buf(uint16_t addr)
@@ -588,11 +600,53 @@ void mia_write_buf(uint16_t addr)
     rw_end = len;
     rw_pos = 0;
     action_state = action_state_write;
-    main_run();
+    mia_run();
 }
 
+//Depends on ULA line buffer being at mbuf-0x100
+void mia_write_ula(uint16_t addr, uint16_t len)
+{
+    assert(!cpu_active());
+    rw_addr = addr;
+    rw_end = len - 0x100;
+    rw_pos = 0 - 0x100;
+    action_state = action_state_write;
+    mia_run();
+}
+
+//Depends on ULA line buffer being at mbuf-0x100
+void mia_read_ula(uint16_t addr, uint16_t len)
+{
+    assert(!cpu_active());
+    rw_addr = addr;
+    rw_end = len - 0x100;
+    rw_pos = 0 - 0x100;
+    action_state = action_state_read;
+    mia_run();
+}
 
 //Called by action loop, needs to be fast so using bare PIO accesses
+//inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
+inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline_switch(uint8_t data){
+    switch(data & 0x82){    
+        case 0x00:          //device, !basic, overlay
+            MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = PIO_OP_ON_C;
+            MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = PIO_OP_OFF;
+            MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (0x20008000 >> 14);    
+            break;
+        case 0x80:          //!device, !basic, overlay
+            MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = PIO_OP_ON_C;
+            MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = PIO_OP_ON_E;
+            break;
+        case 0x02:          //device, basic, !overlay
+        case 0x82:          //!device, basic, !overlay
+        default:
+            MIA_MAP_PIO->sm[MIA_MAP_SM1].instr = PIO_OP_OFF;
+            MIA_MAP_PIO->sm[MIA_MAP_SM2].instr = PIO_OP_OFF;
+            MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (0x2000C000 >> 14);    
+            break;
+    }
+}
 inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
     //mia_set_rom_read_enable(device_rom || basic_rom); 
     //MIA_ROM_READ_PIO->ctrl = (MIA_ROM_READ_PIO->ctrl & 0xf & ~(1u << MIA_ROM_READ_SM)) | (bool_to_bit(device_rom || basic_rom) << MIA_ROM_READ_SM);
@@ -610,12 +664,18 @@ inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool de
     //mia_set_rom_addr(basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2);
         //MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)oric_bank3 : (uintptr_t)oric_bank2) >> 14;
     MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (basic_rom ? (uintptr_t)(0x2000C000 >> 14) : (uintptr_t)(0x20008000 >> 14));    
-
-    map_flag_basic = basic_rom;
-    map_flag_device = device_rom;
+    //act_log[(act_log_idx++) & 0x1F] = 0xFFC0FFEE;
+    //map_flag_basic = basic_rom;
+    //map_flag_device = device_rom;
+    }
+void mia_set_rom_ram_enable_switch(uint8_t data){
+    mia_set_rom_ram_enable_inline_switch(data);
 }
 void mia_set_rom_ram_enable(bool device_rom, bool basic_rom){
-    mia_set_rom_ram_enable_inline(device_rom, basic_rom);
+    uint8_t flags = 0x00;
+    if(!device_rom) flags |= 0x80;
+    if(basic_rom)   flags |= 0x02;
+    mia_set_rom_ram_enable_inline_switch(flags);
 }
 
 static inline __attribute__((always_inline)) uint8_t wait_act_data(void){
@@ -707,7 +767,9 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         //Bits 7:EPROM 6-5:drv_sel 4:side_sel 3:DDEN 2:Read CLK/2 1:ROM/RAM 0:IRQ_EN
                         //[7] 0:device rom enabled
                         //[1] 0:basic rom disabled
-                        mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
+                        //if((prev_ctrl ^ data) & 0x82)
+                        //mia_set_rom_ram_enable_inline(!(data & 0x80), !!(data & 0x02)); //device_rom,basic_rom
+                        mia_set_rom_ram_enable_inline_switch(data);
                         //dsk_set_ctrl(data); //Handling of DSK related bits
                         if((prev_ctrl ^ data) & 0x01)                  //Only send changed dsk bits and only interrupt enable flag
                             sio_hw->fifo_wr = 0x00000000 | (data << 8);   //Transfer with CMD in dsk_act
@@ -751,8 +813,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         }
                         else if (data == 0xFF) // exit()
                         {
-                            reset_requested = true;
-                            main_stop();
+                            stop_requested = true;
                         }
                         break;
                     case CASE_WRITE(0x03AC): // xstack
@@ -814,9 +875,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     case CASE_WRITE(0x03BD): // action read
                         if (++rw_pos >= rw_end){
                             IOREGS(0x03B9) = 0xFE;
-                            reset_requested = true;
                             action_result = -2;
-                            main_stop();
+                            stop_requested = true;
                         }else{
                             IOREGSW(0x03B2) = ++rw_addr;
                         }
@@ -829,9 +889,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                             action_result = rw_addr;
                         if (++rw_pos >= rw_end){
                             IOREGS(0x03B9) = 0xFE;
-                            reset_requested = true;
                             action_result = -2;
-                            main_stop();
+                            stop_requested = true;
                         }else{
                             IOREGSW(0x03B2) = ++rw_addr;
                         }
@@ -911,9 +970,8 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         if(action_state == action_state_write){
                             if (++rw_pos >= rw_end){
                                 IOREGS(0x03B8) = 0xFE;
-                                reset_requested = true;
                                 action_result = -2;
-                                main_stop();
+                                stop_requested = true;
                             }else{
                                 IOREGS(0x03B2) = mbuf[rw_pos];
                                 IOREGSW(0x03B4) = ++rw_addr;

@@ -34,6 +34,12 @@ void mia_read_buf(uint16_t addr);
 // Move data from mbuf to the 6502.
 void mia_write_buf(uint16_t addr);
 
+// Move data from ULA line buffer to the 6502
+void mia_write_ula(uint16_t addr, uint16_t len);
+
+// Move data from the 6502 to the ULA line buffer
+void mia_read_ula(uint16_t addr, uint16_t len);
+
 // Verify the mbuf matches 6502 memory.
 void mia_verify_buf(uint16_t addr);
 
@@ -52,6 +58,7 @@ uint32_t mia_buf_crc32();
 //Enable read responce of ROM address space
 //void mia_set_rom_read_enable(bool enable);
 void mia_set_rom_ram_enable(bool device_rom, bool basic_rom);
+void mia_set_rom_ram_enable_switch(uint8_t data);
 
 //Call boot from Oric - typical from CUmini ROM
 void mia_api_boot(void);

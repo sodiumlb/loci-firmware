@@ -136,6 +136,7 @@ target_sources(loci-firmware PRIVATE
     mia/oric/dsk.c
     mia/oric/rom.c
     mia/oric/tap.c
+    mia/oric/ula.c
     fatfs/ff.c
     fatfs/ffunicode.c
     littlefs/lfs.c

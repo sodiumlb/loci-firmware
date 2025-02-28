@@ -27,7 +27,7 @@ static uint8_t ssd_ssd1306_addrs[] = { 0x3C, 0x3D };
 
 //static uint8_t ssd_framebuffer_tx[1025];
 extern volatile uint8_t ssd_framebuffer_tx[1025];
-asm(".equ ssd_framebuffer_tx, 0x20040500");
+asm(".equ ssd_framebuffer_tx, 0x20040600");
 
 static bool ssd_is_present = false;
 static volatile uint8_t *ssd_framebuffer = &ssd_framebuffer_tx[1];

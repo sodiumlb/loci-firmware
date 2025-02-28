@@ -131,7 +131,7 @@ void cpu_stop(void)
 
 bool cpu_active(void)
 {
-    return cpu_run_requested;
+    return !ext_get_cached(EXT_RESET);
 }
 
 void cpu_api_phi2(void)
