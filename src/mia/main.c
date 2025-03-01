@@ -367,7 +367,7 @@ int main(void)
 
     // Trigger main_reclock()
     cpu_set_phi2_khz(cfg_get_phi2_khz());
-    main_break();
+    //main_break();
     while (true)
     {
         main_task();
