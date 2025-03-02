@@ -29,7 +29,7 @@ static struct
     size_t cmd_len;
     const char *const cmd;
     mon_function func;
-} const COMMANDS[] = {
+} const __in_flash("mon") COMMANDS[] = {
     {4, "help", hlp_mon_help},
     {1, "h", hlp_mon_help},
     {1, "?", hlp_mon_help},
@@ -53,7 +53,7 @@ static struct
 static const size_t COMMANDS_COUNT = sizeof COMMANDS / sizeof *COMMANDS;
 
 // Returns NULL if not found. Advances buf to start of args.
-static mon_function mon_command_lookup(const char **buf, uint8_t buflen)
+static mon_function __in_flash("mon_cmd") mon_command_lookup(const char **buf, uint8_t buflen)
 {
     size_t i;
     for (i = 0; i < buflen; i++)
