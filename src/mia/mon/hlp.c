@@ -43,13 +43,14 @@ static const char __in_flash("helptext") hlp_text_set[] =
     "SET VGA (0|1|2)     - Query or set display type for VGA output.";
 
 static const char __in_flash("helptext") hlp_text_about[] =
-    "Picocomputer 6502 - Copyright (c) 2023 Rumbledethumps.\n"
-    "     Pi Pico SDKs - Copyright (c) 2020 Raspberry Pi (Trading) Ltd.\n"
-    "      Tiny printf - Copyright (c) 2014-2019 Marco Paland, PALANDesign.\n"
-    "          TinyUSB - Copyright (c) 2018 hathach (tinyusb.org)\n"
-    "            FatFs - Copyright (c) 20xx ChaN.\n"
-    "         littlefs - Copyright (c) 2022 The littlefs authors.\n"
-    "                    Copyright (c) 2017 Arm Limited.";
+    "   Oric Loci - Copyright (c) 2024 Sodiumlightbaby.\n"
+    "Picocomputer - Copyright (c) 2023 Rumbledethumps.\n"
+    "Pi Pico SDKs - Copyright (c) 2020 Raspberry Pi (Trading) Ltd.\n"
+    " Tiny printf - Copyright (c) 2014-2019 Marco Paland, PALANDesign.\n"
+    "     TinyUSB - Copyright (c) 2018 hathach (tinyusb.org)\n"
+    "       FatFs - Copyright (c) 20xx ChaN.\n"
+    "    littlefs - Copyright (c) 2022 The littlefs authors.\n"
+    "               Copyright (c) 2017 Arm Limited.";
 
 static const char __in_flash("helptext") hlp_text_system[] =
     "The Picocomputer does not use a traditional parallel ROM like a 27C64 or\n"
@@ -207,12 +208,12 @@ static const char __in_flash("helptext") hlp_text_vga[] =
     "  1 - 640x480 and 1280x720, 16:9 modes will not letterbox\n"
     "  2 - 1280x1024, all graphics modes will letterbox";
 
-static struct
+static struct 
 {
     size_t cmd_len;
     const char *const cmd;
     const char *const text;
-} const COMMANDS[] = {
+} const __in_flash("helptext") COMMANDS[] = {
     {3, "set", hlp_text_set}, // must be first
     {6, "status", hlp_text_status},
     {5, "about", hlp_text_about},
@@ -252,7 +253,7 @@ static struct
     size_t set_len;
     const char *const cmd;
     const char *const text;
-} const SETTINGS[] = {
+} const __in_flash("helptext") SETTINGS[] = {
     {4, "caps", hlp_text_caps},
     {4, "phi2", hlp_text_phi2},
     {4, "resb", hlp_text_resb},
@@ -264,7 +265,7 @@ static const size_t SETTINGS_COUNT = sizeof SETTINGS / sizeof *SETTINGS;
 
 // Use width=0 to supress printing. Returns count.
 // Anything with only uppercase letters is counted.
-static uint32_t hlp_roms_list(uint32_t width)
+static uint32_t __in_flash("help_roms") hlp_roms_list(uint32_t width)
 {
     uint32_t count = 0;
     uint32_t col = 0;
