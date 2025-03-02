@@ -494,14 +494,17 @@ void mia_main_task(){
         absolute_time_t now = get_absolute_time();
         if (absolute_time_diff_us(now, action_watchdog_timer) < 0)
         {
+            /* TODO THIS IS TEMPORARY WORK-AROUND FOR HANGING TRANSFERS
             printf("****TIMEOUT****\n");
             printf("%02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
             IOREGS(0x03B0),IOREGS(0x03B1),IOREGS(0x03B2),IOREGS(0x03B3),
             IOREGS(0x03B4),IOREGS(0x03B5),IOREGS(0x03B6),IOREGS(0x03B7),
             IOREGS(0x03B8));
             printf("%d-%d %s\n", rw_pos, rw_end, action_state == action_state_read ? "R" : "N");
+            */
             action_result = -3;
-            main_stop();
+            //main_stop();
+            mia_stop();
         }
     }
     if(mia_io_errors != prev_io_errors){
