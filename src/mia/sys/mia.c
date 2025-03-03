@@ -649,6 +649,7 @@ inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline_switch(
             MIA_READ_PIO->txf[MIA_READ_ADDR_SM] = (0x2000C000 >> 14);    
             break;
     }
+    map_flags = data;
 }
 inline __attribute__((always_inline)) void mia_set_rom_ram_enable_inline(bool device_rom, bool basic_rom){
     //mia_set_rom_read_enable(device_rom || basic_rom); 
