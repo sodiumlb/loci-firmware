@@ -144,6 +144,10 @@ void mia_run(void)
     //Normal emulated boot
     if (action_state == action_state_idle){
         mia_set_rom_ram_enable(!!(mia_boot_settings & MIA_BOOTSET_FDC),!(mia_boot_settings & MIA_BOOTSET_FDC));
+        if(!ext_get_cached(EXT_RESET)){
+            ext_put(EXT_RESET,true);
+            sleep_ms(10);
+        }
         return;
     }
     
@@ -177,7 +181,8 @@ void mia_run(void)
         // 03B1  A9 00     LDA #$00
         // 03B3  8D 00 00  STA $0000
         // 03B6  B8        CLV
-        // 03B7  50 F8     BVC $03B0
+        // 03B7  EA        NOP
+        // 03B8  50 F7     BVC $03B0
         //mia_set_watch_address(0xFFF6);
         IOREGS(0x03B0) = 0x78;
         IOREGS(0x03B1) = 0xA9;
@@ -186,8 +191,9 @@ void mia_run(void)
         IOREGS(0x03B4) = rw_addr & 0xFF;
         IOREGS(0x03B5) = rw_addr >> 8;
         IOREGS(0x03B6) = 0xB8;
-        IOREGS(0x03B7) = 0x50;
-        IOREGS(0x03B8) = 0xF8;
+        IOREGS(0x03B7) = 0xEA;
+        IOREGS(0x03B8) = 0x50;
+        IOREGS(0x03B9) = 0xF7;
         break;
     case action_state_read:
     case action_state_verify:
@@ -215,9 +221,9 @@ void mia_run(void)
     default:
         break;
     }
-    if(!ext_get_cached(EXT_RESET)){
-        ext_put(EXT_RESET,true);
-    }
+    // if(!ext_get_cached(EXT_RESET)){
+    //     ext_put(EXT_RESET,true);
+    // }
     ext_put(EXT_RESET,false);
 }
 
@@ -225,11 +231,11 @@ void mia_stop(void)
 {
     irq_enabled = false;
     ext_put(EXT_IRQ | EXT_ROMDIS, false);
-    if(mia_active())
+    if(!mia_active())
         ext_put(EXT_RESET,true);
 
     //ext_set_dir(EXT_ROMDIS, false);
-    ext_put(EXT_nOE,true);
+    //ext_put(EXT_nOE,true);
     mia_set_rom_read_enable(false);
     mia_set_rom_ram_enable(false,false);
     MIA_MAP_PIO->instr_mem[mia_get_map_prg_offset() + 3] = (uint16_t)(pio_encode_mov_not(pio_y,pio_null));
@@ -973,7 +979,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     case CASE_READ(0x03B6): // action write
                         if(action_state == action_state_write){
                             if (++rw_pos >= rw_end){
-                                IOREGS(0x03B8) = 0xFE;
+                                IOREGS(0x03B9) = 0xFE;
                                 action_result = -2;
                                 stop_requested = true;
                             }else{
