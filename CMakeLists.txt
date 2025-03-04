@@ -24,6 +24,7 @@ if(LOCIFW_VERSION STREQUAL "")
 else()
   # Remove leading 'v'
   string(REGEX REPLACE "^v" "" LOCIFW_VERSION "${LOCIFW_VERSION}")
+  string(REGEX REPLACE "\-.*$" "" LOCIFW_VERSION "${LOCIFW_VERSION}")
   message("" "-- Found version from git: \"${LOCIFW_VERSION}\".")
 endif()
 
