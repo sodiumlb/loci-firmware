@@ -158,6 +158,7 @@ void ext_init(void)
     ext_state = EXT_IDLE;
 }
 
+#ifndef EMBEDDED_EXTRA_ROMS
 void ext_init_bootstrap(){
 #if defined (EMBEDDED_BASIC11B_ROM) || defined (EMBEDDED_BASIC10_ROM) || defined (EMBEDDED_MICRODIS_ROM)
     struct lfs_info info;
@@ -188,6 +189,28 @@ void ext_init_bootstrap(){
     }
 #endif
 }
+#else
+// @iss
+void ext_init_bootstrap(){
+    struct lfs_info info;
+    lfs_file_t fp;
+    size_t i;
+
+    for(i=0; i<rom_desc_cnt; i++){
+        if(!strcmp(rom_desc[i].name,"locirom"))
+          continue;
+        // if(!strcmp(rom_desc[i].name,"microdis.rom"))
+        //   continue;
+
+        if(lfs_stat(&lfs_volume, rom_desc[i].name, &info) == LFS_ERR_NOENT){
+            lfs_file_opencfg(&lfs_volume, &fp, rom_desc[i].name, LFS_O_CREAT | LFS_O_RDWR, lfs_alloc_file_config());
+            lfs_file_write(&lfs_volume, &fp, rom_desc[i].array, rom_desc[i].size);
+            lfs_free_file_config(&fp);
+            lfs_file_close(&lfs_volume, &fp);
+        }
+    }
+}
+#endif
 
 #define TEST_PRG_ADDR (0xFFE8)
 const uint8_t __in_flash() test_prg[] = {
@@ -296,6 +319,10 @@ void ext_task(void)
                 ext_state = EXT_BOOT_LOCI;
             }
             break;
+
+        // @iss: silence compiler
+        default:
+          break;
     }
 
     if(ext_refresh_cnt--)
