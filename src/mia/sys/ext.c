@@ -399,7 +399,7 @@ void ext_task(void)
 #ifdef EMBEDDED_TEST108K_ROM
             if(ext_get_cached(EXT_BTN_A) && ext_btn_hold_oneshot){
                 ext_btn_hold_oneshot = false;
-                main_break();
+                main_stop();
                 ext_state = EXT_BOOT_DIAG;
             }     
 #endif   
