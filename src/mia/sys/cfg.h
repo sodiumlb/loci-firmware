@@ -42,5 +42,7 @@ bool cfg_set_read_addr_delay(uint8_t delay);
 uint8_t cfg_get_read_addr_delay(void);
 bool cfg_set_ula_delay(uint8_t delay);
 uint8_t cfg_get_ula_delay(void);
+bool cfg_set_acia(uint8_t mode);
+uint8_t cfg_get_acia(void);
 
 #endif /* _CFG_H_ */

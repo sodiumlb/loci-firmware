@@ -11,8 +11,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "tusb.h"
+#include "sys/cfg.h"
 #include "sys/ext.h"
 #include "sys/mem.h"
+#include "sys/mia.h"
 #include "usb/cdc.h"
 #include "oric/acia.h"
 
@@ -95,7 +97,24 @@ bool acia_get_base_status(uint8_t bit){
  */
 
 void acia_init(void){
-    acia_io = (acia_io_t*)(&IOREGS(0x380));
+    switch(cfg_get_acia()){
+        //Mode 1 - $0380-$0383
+        case(1):    
+            mia_iopage_enable(0x40, 0x43, false, false);
+            mia_iopage_enable(0x80, 0x83, true, true);
+            acia_io = (acia_io_t*)(&IOREGS(0x380));
+            break;
+        //Mode 2 - $0340-$0343
+        case(2):
+            mia_iopage_enable(0x40, 0x43, true, true);
+            mia_iopage_enable(0x80, 0x83, false, false);
+            acia_io = (acia_io_t*)(&IOREGS(0x340));
+            break;
+        //Mode 0 - Disabled
+        default:
+            mia_iopage_enable(0x40, 0x43, false, false);
+            mia_iopage_enable(0x80, 0x83, false, false);
+    }
     acia_reset(true);
     acia_dev = -1;
     acia_rx_buffer_head = 0;

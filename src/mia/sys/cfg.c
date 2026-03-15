@@ -26,9 +26,10 @@
 // +TD0        | IO Data signal timing 0-31
 // +TA0        | ROM Read address signal timing 0-31
 // +TU0        | ULA snooping timing 0-31
+// +A0         | ACIA mode
 // BASIC       | Boot ROM - Must be last
 
-#define CFG_VERSION 2
+#define CFG_VERSION 3
 static const char filename[] = "CONFIG.SYS";
 
 static uint32_t cfg_phi2_khz;
@@ -42,6 +43,7 @@ static uint8_t cfg_io_write_delay;
 static uint8_t cfg_io_data_delay;
 static uint8_t cfg_read_addr_delay;
 static uint8_t cfg_ula_delay = 10;
+static uint8_t cfg_acia = 1;
 
 // Optional string can replace boot string
 static void cfg_save_with_boot_opt(char *opt_str)
@@ -85,6 +87,7 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                "+TD%d\n"
                                "+TA%d\n"
                                "+TU%d\n"
+                               "+A%d\n"
                                "%s",
                                CFG_VERSION,
                                cfg_phi2_khz,
@@ -98,6 +101,7 @@ static void cfg_save_with_boot_opt(char *opt_str)
                                cfg_io_data_delay,
                                cfg_read_addr_delay,
                                cfg_ula_delay,
+                               cfg_acia,
                                opt_str);
         if (lfsresult < 0)
             printf("?Unable to write %s contents (%d)\n", filename, lfsresult);
@@ -151,6 +155,8 @@ static void cfg_load_with_boot_opt(bool boot_only)
             case 'D':
                 cfg_vga_display = val;
                 break;
+            case 'A':
+                cfg_acia = val;
             default:
                 break;
             }
@@ -390,4 +396,17 @@ bool cfg_set_ula_delay(uint8_t delay)
 uint8_t cfg_get_ula_delay(void)
 {
     return cfg_ula_delay;
+}
+
+bool cfg_set_acia(uint8_t mode){
+    bool ok = false;
+    if(mode <= 2){
+        cfg_acia = mode;
+        ok = true;
+        cfg_save_with_boot_opt(NULL);
+    }
+}
+
+uint8_t cfg_get_acia(void){
+    return cfg_acia;
 }

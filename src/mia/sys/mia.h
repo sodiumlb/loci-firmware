@@ -60,7 +60,11 @@ uint32_t mia_buf_crc32();
 void mia_set_rom_ram_enable(bool device_rom, bool basic_rom);
 void mia_set_rom_ram_enable_switch(uint8_t data);
 
-//Call boot from Oric - typical from CUmini ROM
+//Make MIA loop respond (or not) to specific address ranges (4 register granularity)
+//NOTE This only masks or unmasks fixed response functionality in the MIA loop
+void mia_iopage_enable(uint8_t addr_low, uint8_t addr_hi, bool read, bool write);
+
+//Call boot from Oric - typical from LOCI ROM
 void mia_api_boot(void);
 
 unsigned int mia_get_act_prg_offset(void);

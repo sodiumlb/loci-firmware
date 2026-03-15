@@ -312,6 +312,27 @@ static void set_ula_delay(const char *args, size_t len)
     set_print_ula_delay();    
 }
 
+static void set_print_acia(void){
+    const char *const acia_labels[] = {"0 - Disabled", "1 - $0380", "2 - $0340"};
+    printf("ACIA: %s\n", acia_labels[cfg_get_acia()]);
+}
+
+static void set_acia(const char *args, size_t len)
+{
+    uint32_t mode;
+    if (len)
+    {
+        if (!parse_uint32(&args, &len, &mode) ||
+            !parse_end(args, len))
+        {
+            printf("?invalid argument\n");
+            return;
+        }
+        cfg_set_acia(mode);
+    }
+    set_print_acia();    
+}
+
 typedef void (*set_function)(const char *, size_t);
 static struct
 {
@@ -331,6 +352,7 @@ static struct
     {4, "tiod", set_io_data_delay},
     {4, "tadr", set_read_addr_delay},
     {4, "tula", set_ula_delay},
+    {4, "acia", set_acia},
 };
 static const size_t SETTERS_COUNT = sizeof SETTERS / sizeof *SETTERS;
 
@@ -348,6 +370,7 @@ static void set_print_all(void)
     set_print_io_data_delay();
     set_print_read_addr_delay();
     set_print_ula_delay();
+    set_print_acia();
 }
 
 void set_mon_set(const char *args, size_t len)

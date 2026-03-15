@@ -1396,6 +1396,18 @@ static void mia_ula_pio_init(void)
 
 }
 
+void mia_iopage_enable(uint8_t addr_low, uint8_t addr_hi, bool read, bool write){
+    for(int i=(addr_low >> 2); i<=(addr_hi >> 2); i++){
+        if(read)
+            mia_iopage_read_enable_map[i>>7] |= (0x1UL << (i & 0x1F));
+        else
+            mia_iopage_read_enable_map[i>>7] &= ~(0x1UL << (i & 0x1F));
+        if(write)
+            mia_iopage_write_enable_map[i>>7] |= (0x1UL << (i & 0x1F));
+        else
+            mia_iopage_write_enable_map[i>>7] &= ~(0x1UL << (i & 0x1F));
+    }    
+}
 
 void mia_init(void)
 {
@@ -1462,31 +1474,20 @@ void mia_init(void)
         IOREGS(i) = 0x00;
     }
 
-    /*
-    for(int i=0; i<64; i++){
-        mia_iopage_enable_map[i] = 0x00;
-    }
-    //Enable response on IO registers 0x310-0x31B
-    for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
-        mia_iopage_enable_map[i] = 0xff;
-    }
-    */
-   mia_iopage_read_enable_map[0] = 0;
-   mia_iopage_read_enable_map[1] = 0;
-   mia_iopage_write_enable_map[0] = 0xFFFFFFFF;
-   mia_iopage_write_enable_map[1] = 0xFFFFFFFF;
-    //Enable response on IO registers 0x310-0x31B (DSK/TAP)
-    for(int i=(0x10 >> 2); i<=(0x1B >> 2); i++){
-        mia_iopage_read_enable_map[0] |= (0x1UL << (i & 0x1F));
-    }
-    //Enable response on IO registers 0x380-0x383 (ACIA)
-    for(int i=(0x80 >> 2); i<=(0x83 >> 2); i++){
-        mia_iopage_read_enable_map[1] |= (0x1UL << (i & 0x1F));
-    }
-    //Enable response on IO registers 0x3A0-0x3BF (LOCI)
-    for(int i=(0xA0 >> 2); i<=(0xBF >> 2); i++){
-        mia_iopage_read_enable_map[1] |= (0x1UL << (i & 0x1F));
-    }
+    //Default no IO address have response enabled
+    mia_iopage_read_enable_map[0] = 0;
+    mia_iopage_read_enable_map[1] = 0;
+    mia_iopage_write_enable_map[0] = 0;
+    mia_iopage_write_enable_map[1] = 0;
+    //Enable R/W response on IO registers 0x310-0x31B (DSK/TAP)
+    mia_iopage_enable(0x10, 0x1B, true, true);
+
+    //Enable R/W response on IO registers 0x380-0x383 (ACIA)
+    mia_iopage_enable(0x80, 0x83, true, true);
+
+    //Enable R/W response on IO registers 0x3A0-0x3BF (LOCI)
+    mia_iopage_enable(0xA0, 0xBF, true, true);
+
    
    //LOCI identity marker
    IOREGS(0x0319) = 'L';
