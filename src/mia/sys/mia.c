@@ -698,8 +698,8 @@ int mia_read_dma_channel;
 
 //#define CASE_READ(addr) (addr & 0x1F)
 //#define CASE_WRITE(addr) (0x20 | (addr & 0x1F))
-#define CASE_READ(addr) (addr & 0x000000FF)
-#define CASE_WRITE(addr) (0x01000000 | (addr & 0x000000FF))
+#define CASE_READ(addr) (0x80000000 | (addr & 0x000000FF))
+#define CASE_WRITE(addr) (0x40000000 | (addr & 0x000000FF))
 #define MIA_RW0 IOREGS(0x03A4)
 #define MIA_STEP0 *(int8_t *)&IOREGS(0x03A5)
 #define MIA_ADDR0 IOREGSW(0x03A6)
@@ -714,8 +714,6 @@ static __attribute__((optimize("O1"))) void act_loop(void)
         if (!(MIA_ACT_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + MIA_ACT_SM))))
         {
             uint32_t rw_data_addr = MIA_ACT_PIO->rxf[MIA_ACT_SM];
-            bool read_enable;
-            bool write_enable;
 
             /*
             //Track errors and stop processing if address is wrong (0x03xx)
@@ -726,14 +724,18 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             */
             if(!(rw_data_addr & 0x01000000)){  //Handle io page reads. Save PIO cycles
                 (&dma_hw->ch[mia_read_dma_channel])->al3_read_addr_trig = (uintptr_t)((uint32_t)&iopage | (rw_data_addr & 0xFF));
-                read_enable = !!((mia_iopage_read_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
+                bool read_enable = !!((mia_iopage_read_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
                 if(read_enable){
                     MIA_IO_READ_PIO->irq = 1u << 5;
+                    rw_data_addr |= 0x80000000;
                 }
             }else{
                 //For now the write_enable flag is only applied to conditionally used addresses (ACIA)
                 //TODO Evaluate packing it into the case word for general use
-                write_enable = !!((mia_iopage_write_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
+                bool write_enable = !!((mia_iopage_write_enable_map[(rw_data_addr & 0x00000080)>>7]) & (1UL << ((rw_data_addr >> 2) & 0x1F)));
+                if(write_enable){
+                    rw_data_addr |= 0x40000000;
+                }
             }
             /*
                 Writes are served by a second FIFO word from the PIO program when data is valid.
@@ -745,7 +747,7 @@ static __attribute__((optimize("O1"))) void act_loop(void)
             uint8_t data;
             volatile uint8_t sink;
             uint32_t fifo_data;
-                switch(rw_data_addr & 0x010000FF){
+                switch(rw_data_addr & 0xC00000FF){
                     //TAP Motor sense (snooping VIA writes)
                     case CASE_WRITE(0x300):
                         data = wait_act_data();
@@ -789,26 +791,22 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                     case CASE_WRITE(0x340):
                     case CASE_WRITE(0x380):
                         data = wait_act_data();
-                        if(write_enable)
-                            acia_write(data);
+                        acia_write(data);
                         break;
                     case CASE_WRITE(0x341):
                     case CASE_WRITE(0x381):
                         data = wait_act_data();
-                        if(write_enable)
-                            acia_reset(false);
+                        acia_reset(false);
                         break;
                     case CASE_WRITE(0x342):
                     case CASE_WRITE(0x382):
                         data = wait_act_data();
-                        if(write_enable)
-                            acia_cmd(data);
+                        acia_cmd(data);
                         break;
                     case CASE_WRITE(0x343):
                     case CASE_WRITE(0x383):
                         data = wait_act_data();
-                        if(write_enable)
-                            acia_ctrl(data);
+                        acia_ctrl(data);
                         break;
                     //RP6502-like API interface write registers
                     case CASE_WRITE(0x03AF): // OS function call
@@ -993,14 +991,14 @@ static __attribute__((optimize("O1"))) void act_loop(void)
                         break;
                     default:
                         //Default register write handling
-                        if(rw_data_addr & 0x01000000){
+                        if(rw_data_addr & 0x40000000){
                             data = wait_act_data();
                             IOREGS(rw_data_addr & 0xFFFF) = data;
-
                         }
                         break;
             }
             sink = data;        //Avoid wait_act_data() calls to be optimised away
+            (sink);
                         /*
                         case CASE_WRITE(0x03B0): // IRQ Enable
                             irq_enabled = data;
@@ -1397,15 +1395,15 @@ static void mia_ula_pio_init(void)
 }
 
 void mia_iopage_enable(uint8_t addr_low, uint8_t addr_hi, bool read, bool write){
-    for(int i=(addr_low >> 2); i<=(addr_hi >> 2); i++){
+    for(uint8_t i=(addr_low >> 2); i<=(addr_hi >> 2); i++){
         if(read)
-            mia_iopage_read_enable_map[i>>7] |= (0x1UL << (i & 0x1F));
+            mia_iopage_read_enable_map[i>>5] |= (0x1UL << (i & 0x1F));
         else
-            mia_iopage_read_enable_map[i>>7] &= ~(0x1UL << (i & 0x1F));
+            mia_iopage_read_enable_map[i>>5] &= ~(0x1UL << (i & 0x1F));
         if(write)
-            mia_iopage_write_enable_map[i>>7] |= (0x1UL << (i & 0x1F));
+            mia_iopage_write_enable_map[i>>5] |= (0x1UL << (i & 0x1F));
         else
-            mia_iopage_write_enable_map[i>>7] &= ~(0x1UL << (i & 0x1F));
+            mia_iopage_write_enable_map[i>>5] &= ~(0x1UL << (i & 0x1F));
     }    
 }
 
@@ -1479,6 +1477,10 @@ void mia_init(void)
     mia_iopage_read_enable_map[1] = 0;
     mia_iopage_write_enable_map[0] = 0;
     mia_iopage_write_enable_map[1] = 0;
+
+    //Enable W snooping on IO register 0x300 (-0x303) (TAP motor snoop)
+    mia_iopage_enable(0x00, 0x00, false, true);
+
     //Enable R/W response on IO registers 0x310-0x31B (DSK/TAP)
     mia_iopage_enable(0x10, 0x1B, true, true);
 
