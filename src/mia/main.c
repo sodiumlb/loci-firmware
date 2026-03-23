@@ -198,6 +198,8 @@ bool main_pix(uint8_t ch, uint8_t addr, uint16_t word)
         return mou_xreg(word);
     case 0x002:
         return pad_xreg(word);
+    case 0x008:
+        return acia_xreg(word);
     default:
         return false;
     }

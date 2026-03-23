@@ -93,28 +93,54 @@ bool acia_get_base_status(uint8_t bit){
     return(!!(acia_stat_base & bit));
 }
 
+uint8_t acia_get_iopage_addr(void){
+    if(acia_io)
+        return (uint)acia_io & 0xFF;
+    else
+        return 0xFF;    //If not enabled return 0xFF
+}
+
+bool acia_set_iopage_addr(uint8_t addr){
+    if(addr == 0xFF)
+        return false;
+    if(acia_io){
+        uint8_t old_addr = acia_get_iopage_addr();
+        mia_iopage_enable(old_addr, old_addr+3, false, false);
+    }
+    mia_iopage_enable(addr, addr+3, true, true);
+    acia_io = (acia_io_t*)(&IOREGS(addr));
+    return true;
+}
+
+bool acia_xreg(uint16_t word){
+    switch(word){
+        //Mode 0 - Disabled
+        case(0):
+            mia_iopage_enable(0x40, 0x43, false, false);
+            mia_iopage_enable(0x80, 0x83, false, false);
+            acia_io = 0;
+            break;
+        //Mode 1 - $0380-$0383
+        case(1):
+            acia_set_iopage_addr(0x80);    
+            break;
+        //Mode 2 - $0340-$0343
+        case(2):
+            acia_set_iopage_addr(0x40);    
+            break;
+        default:
+            return false;
+    }
+    cfg_set_acia(word); //Make persistent 
+    return true;
+}
+
 /* Kernel events
  */
 
 void acia_init(void){
-    switch(cfg_get_acia()){
-        //Mode 1 - $0380-$0383
-        case(1):    
-            mia_iopage_enable(0x40, 0x43, false, false);
-            mia_iopage_enable(0x80, 0x83, true, true);
-            acia_io = (acia_io_t*)(&IOREGS(0x380));
-            break;
-        //Mode 2 - $0340-$0343
-        case(2):
-            mia_iopage_enable(0x40, 0x43, true, true);
-            mia_iopage_enable(0x80, 0x83, false, false);
-            acia_io = (acia_io_t*)(&IOREGS(0x340));
-            break;
-        //Mode 0 - Disabled
-        default:
-            mia_iopage_enable(0x40, 0x43, false, false);
-            mia_iopage_enable(0x80, 0x83, false, false);
-    }
+    //Persistent 
+    acia_xreg(cfg_get_acia());  //Load persistent mode
     acia_reset(true);
     acia_dev = -1;
     acia_rx_buffer_head = 0;
