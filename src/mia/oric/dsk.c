@@ -809,9 +809,9 @@ uint8_t dsk_cmd(uint8_t raw_cmd){
                 break;
             case STEP_OUT:
                 if(dsk_active.track > 0){
-                    dsk_next_track = dsk_active.track + 1;
+                    dsk_next_track = dsk_active.track - 1;
                 }
-                dsk_active.step_dir_out = false;
+                dsk_active.step_dir_out = true;
                 break;
             default:
                 //fail
