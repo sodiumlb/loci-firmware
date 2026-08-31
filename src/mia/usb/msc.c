@@ -160,7 +160,7 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
     case CTRL_SYNC:
         return RES_OK;
     case GET_SECTOR_COUNT:
-        *((DWORD *)buff) = (WORD)tuh_msc_get_block_count(dev_addr, lun);
+        *((DWORD *)buff) = tuh_msc_get_block_count(dev_addr, lun);
         return RES_OK;
     case GET_SECTOR_SIZE:
         *((WORD *)buff) = (WORD)tuh_msc_get_block_size(dev_addr, lun);
